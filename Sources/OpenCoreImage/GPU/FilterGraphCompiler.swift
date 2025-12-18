@@ -421,7 +421,10 @@ internal actor FilterGraphCompiler {
             return .compositing
 
         // Transition filters
-        case "CIDissolveTransition":
+        case "CIDissolveTransition", "CISwipeTransition",
+             "CIBarsSwipeTransition", "CIModTransition",
+             "CIFlashTransition", "CICopyMachineTransition",
+             "CIRippleTransition":
             return .transition
 
         // Generator filters

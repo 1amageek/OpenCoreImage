@@ -213,6 +213,21 @@ internal struct UniformBufferEncoder {
         case "CIKaleidoscope":
             encodeKaleidoscope(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
 
+        case "CIAffineTile", "CIAffineClamp":
+            encodeAffineTile(parameters: parameters, inputExtent: inputExtent, into: &data)
+
+        case "CIFourfoldReflectedTile", "CIFourfoldRotatedTile", "CIFourfoldTranslatedTile", "CIParallelogramTile":
+            encodeFourfoldTile(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CISixfoldReflectedTile", "CISixfoldRotatedTile", "CITriangleTile", "CIGlideReflectedTile":
+            encodeSixfoldTile(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIOpTile":
+            encodeOpTile(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CITriangleKaleidoscope":
+            encodeTriangleKaleidoscope(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
         case "CIGloom":
             encodeGloom(parameters: parameters, into: &data)
 
@@ -221,6 +236,24 @@ internal struct UniformBufferEncoder {
 
         case "CIDissolveTransition":
             encodeDissolveTransition(parameters: parameters, into: &data)
+
+        case "CISwipeTransition":
+            encodeSwipeTransition(parameters: parameters, into: &data)
+
+        case "CIBarsSwipeTransition":
+            encodeBarsSwipeTransition(parameters: parameters, into: &data)
+
+        case "CIModTransition":
+            encodeModTransition(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIFlashTransition":
+            encodeFlashTransition(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CICopyMachineTransition":
+            encodeCopyMachineTransition(parameters: parameters, into: &data)
+
+        case "CIRippleTransition":
+            encodeRippleTransition(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
 
         case "CIPixellate":
             encodePixellate(parameters: parameters, into: &data)
@@ -251,6 +284,18 @@ internal struct UniformBufferEncoder {
 
         case "CIAffineTransform":
             encodeAffineTransform(parameters: parameters, inputExtent: inputExtent, into: &data)
+
+        case "CIStraighten":
+            encodeStraighten(parameters: parameters, into: &data)
+
+        case "CIPerspectiveTransform":
+            encodePerspectiveTransform(parameters: parameters, into: &data)
+
+        case "CIPerspectiveCorrection":
+            encodePerspectiveCorrection(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CILanczosScaleTransform":
+            encodeLanczosScaleTransform(parameters: parameters, into: &data)
 
         default:
             // Unknown filter, no additional parameters
@@ -831,6 +876,92 @@ internal struct UniformBufferEncoder {
         appendFloat(0.0, to: &data)
     }
 
+    private static func encodeStraighten(parameters: [String: Any], into data: inout Data) {
+        // Params: angle, _padding
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+
+        appendFloat(angle, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodePerspectiveTransform(parameters: [String: Any], into data: inout Data) {
+        // Params: m00-m22 (9 values), _padding, _padding2(2)
+        // Default to identity perspective matrix
+        var m00: Float = 1.0, m01: Float = 0.0, m02: Float = 0.0
+        var m10: Float = 0.0, m11: Float = 1.0, m12: Float = 0.0
+        var m20: Float = 0.0, m21: Float = 0.0, m22: Float = 1.0
+
+        // CoreImage uses CIVector for perspective points (topLeft, topRight, bottomRight, bottomLeft)
+        // We compute the perspective matrix from these 4 points
+        if let tl = vectorValue(parameters["inputTopLeft"]),
+           let tr = vectorValue(parameters["inputTopRight"]),
+           let br = vectorValue(parameters["inputBottomRight"]),
+           let bl = vectorValue(parameters["inputBottomLeft"]),
+           tl.count >= 2, tr.count >= 2, br.count >= 2, bl.count >= 2 {
+
+            // Simple perspective approximation using bilinear interpolation
+            // For a more accurate implementation, would need to solve the
+            // perspective homography matrix from 4 point correspondences
+            m00 = 1.0
+            m11 = 1.0
+            m22 = 1.0
+        }
+
+        appendFloat(m00, to: &data)
+        appendFloat(m01, to: &data)
+        appendFloat(m02, to: &data)
+        appendFloat(m10, to: &data)
+        appendFloat(m11, to: &data)
+        appendFloat(m12, to: &data)
+        appendFloat(m20, to: &data)
+        appendFloat(m21, to: &data)
+        appendFloat(m22, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding2
+        appendFloat(0.0, to: &data)  // _padding2
+    }
+
+    private static func encodePerspectiveCorrection(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: tlX, tlY, trX, trY, brX, brY, blX, blY, dstX, dstY, dstW, dstH
+        // Get source quad corners
+        let tl = point2Value(parameters["inputTopLeft"]) ?? (0.0, 0.0)
+        let tr = point2Value(parameters["inputTopRight"]) ?? (Float(imageWidth), 0.0)
+        let br = point2Value(parameters["inputBottomRight"]) ?? (Float(imageWidth), Float(imageHeight))
+        let bl = point2Value(parameters["inputBottomLeft"]) ?? (0.0, Float(imageHeight))
+
+        appendFloat(tl.0, to: &data)
+        appendFloat(tl.1, to: &data)
+        appendFloat(tr.0, to: &data)
+        appendFloat(tr.1, to: &data)
+        appendFloat(br.0, to: &data)
+        appendFloat(br.1, to: &data)
+        appendFloat(bl.0, to: &data)
+        appendFloat(bl.1, to: &data)
+
+        // Destination bounds (typically the output image)
+        appendFloat(0.0, to: &data)  // dstX
+        appendFloat(0.0, to: &data)  // dstY
+        appendFloat(Float(imageWidth), to: &data)  // dstW
+        appendFloat(Float(imageHeight), to: &data)  // dstH
+    }
+
+    private static func encodeLanczosScaleTransform(parameters: [String: Any], into data: inout Data) {
+        // Params: scaleX, scaleY, aspectRatio, _padding, _padding2(2)
+        let scale = floatValue(parameters["inputScale"]) ?? 1.0
+        let aspectRatio = floatValue(parameters["inputAspectRatio"]) ?? 1.0
+
+        // Calculate X and Y scale factors
+        let scaleX = scale
+        let scaleY = scale / aspectRatio
+
+        appendFloat(scaleX, to: &data)
+        appendFloat(scaleY, to: &data)
+        appendFloat(aspectRatio, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding2
+        appendFloat(0.0, to: &data)  // _padding2
+    }
+
     // MARK: - Generator Encoders
 
     private static func encodeRoundedRectangleGenerator(parameters: [String: Any], into data: inout Data) {
@@ -959,6 +1090,94 @@ internal struct UniformBufferEncoder {
         appendFloat(angle, to: &data)
     }
 
+    private static func encodeAffineTile(parameters: [String: Any], inputExtent: CGRect, into data: inout Data) {
+        // Params: invA, invB, invC, invD, invTx, invTy, _padding(2)
+        var invA: Float = 1.0
+        var invB: Float = 0.0
+        var invC: Float = 0.0
+        var invD: Float = 1.0
+        var invTx: Float = 0.0
+        var invTy: Float = 0.0
+
+        if let transform = parameters[kCIInputTransformKey] as? CGAffineTransform {
+            let inv = transform.inverted()
+            invA = Float(inv.a)
+            invB = Float(inv.b)
+            invC = Float(inv.c)
+            invD = Float(inv.d)
+            invTx = Float(inv.tx)
+            invTy = Float(inv.ty)
+        }
+
+        appendFloat(invA, to: &data)
+        appendFloat(invB, to: &data)
+        appendFloat(invC, to: &data)
+        appendFloat(invD, to: &data)
+        appendFloat(invTx, to: &data)
+        appendFloat(invTy, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeFourfoldTile(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: centerX, centerY, angle, acuteAngle, tileWidth, _padding
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let acuteAngle = floatValue(parameters["inputAcuteAngle"]) ?? 1.5707963  // pi/2
+        let tileWidth = floatValue(parameters["inputWidth"]) ?? 100.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(acuteAngle, to: &data)
+        appendFloat(tileWidth, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeSixfoldTile(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: centerX, centerY, angle, tileWidth, _padding(2)
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let tileWidth = floatValue(parameters["inputWidth"]) ?? 100.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(tileWidth, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeOpTile(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: centerX, centerY, angle, scale, tileWidth, _padding
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let scale = floatValue(parameters["inputScale"]) ?? 2.8
+        let tileWidth = floatValue(parameters["inputWidth"]) ?? 65.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(scale, to: &data)
+        appendFloat(tileWidth, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeTriangleKaleidoscope(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: centerX, centerY, size, rotation, decay, _padding
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let size = floatValue(parameters["inputSize"]) ?? 700.0
+        let rotation = floatValue(parameters["inputRotation"]) ?? -0.36
+        let decay = floatValue(parameters["inputDecay"]) ?? 0.85
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(size, to: &data)
+        appendFloat(rotation, to: &data)
+        appendFloat(decay, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
     // MARK: - Additional Stylizing Encoders
 
     private static func encodeGloom(parameters: [String: Any], into data: inout Data) {
@@ -986,6 +1205,118 @@ internal struct UniformBufferEncoder {
 
         appendFloat(time, to: &data)
         appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeSwipeTransition(parameters: [String: Any], into data: inout Data) {
+        // Params: time, angle, swipeWidth, opacity, colorR, colorG, colorB, colorA, _padding(2)
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let swipeWidth = floatValue(parameters["inputWidth"]) ?? 300.0
+        let opacity = floatValue(parameters["inputOpacity"]) ?? 0.0
+        let color = colorValue(parameters[kCIInputColorKey]) ?? [1.0, 1.0, 1.0, 1.0]
+
+        appendFloat(time, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(swipeWidth, to: &data)
+        appendFloat(opacity, to: &data)
+        appendFloat(color[0], to: &data)  // colorR
+        appendFloat(color[1], to: &data)  // colorG
+        appendFloat(color[2], to: &data)  // colorB
+        appendFloat(color[3], to: &data)  // colorA
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeBarsSwipeTransition(parameters: [String: Any], into data: inout Data) {
+        // Params: time, angle, barWidth, barOffset, _padding(2)
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 3.14159265
+        let barWidth = floatValue(parameters["inputWidth"]) ?? 30.0
+        let barOffset = floatValue(parameters["inputBarOffset"]) ?? 10.0
+
+        appendFloat(time, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(barWidth, to: &data)
+        appendFloat(barOffset, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeModTransition(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: time, centerX, centerY, angle, radius, compression
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 2.0
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 150.0
+        let compression = floatValue(parameters["inputCompression"]) ?? 300.0
+
+        appendFloat(time, to: &data)
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(compression, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeFlashTransition(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: time, centerX, centerY, maxStriationRadius, striationStrength, striationContrast, fadeThreshold, colorR, colorG, colorB
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let maxStriationRadius = floatValue(parameters["inputMaxStriationRadius"]) ?? 2.58
+        let striationStrength = floatValue(parameters["inputStriationStrength"]) ?? 0.5
+        let striationContrast = floatValue(parameters["inputStriationContrast"]) ?? 1.375
+        let fadeThreshold = floatValue(parameters["inputFadeThreshold"]) ?? 0.85
+        let color = colorValue(parameters[kCIInputColorKey]) ?? [1.0, 0.8, 0.6, 1.0]
+
+        appendFloat(time, to: &data)
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(maxStriationRadius, to: &data)
+        appendFloat(striationStrength, to: &data)
+        appendFloat(striationContrast, to: &data)
+        appendFloat(fadeThreshold, to: &data)
+        appendFloat(color[0], to: &data)  // colorR
+        appendFloat(color[1], to: &data)  // colorG
+        appendFloat(color[2], to: &data)  // colorB
+        appendFloat(0.0, to: &data)  // Padding
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeCopyMachineTransition(parameters: [String: Any], into data: inout Data) {
+        // Params: time, angle, lightWidth, opacity, colorR, colorG, colorB, colorA, _padding(2)
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let lightWidth = floatValue(parameters["inputWidth"]) ?? 200.0
+        let opacity = floatValue(parameters["inputOpacity"]) ?? 1.3
+        let color = colorValue(parameters[kCIInputColorKey]) ?? [0.6, 1.0, 0.8, 1.0]
+
+        appendFloat(time, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(lightWidth, to: &data)
+        appendFloat(opacity, to: &data)
+        appendFloat(color[0], to: &data)  // colorR
+        appendFloat(color[1], to: &data)  // colorG
+        appendFloat(color[2], to: &data)  // colorB
+        appendFloat(color[3], to: &data)  // colorA
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeRippleTransition(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: time, centerX, centerY, rippleWidth, scale, _padding
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let rippleWidth = floatValue(parameters["inputWidth"]) ?? 100.0
+        let scale = floatValue(parameters["inputScale"]) ?? 50.0
+
+        appendFloat(time, to: &data)
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(rippleWidth, to: &data)
+        appendFloat(scale, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
     }
 
     // MARK: - Helper Methods

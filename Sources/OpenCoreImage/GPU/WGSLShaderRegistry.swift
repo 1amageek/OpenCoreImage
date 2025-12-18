@@ -149,6 +149,18 @@ internal struct WGSLShaderRegistry {
 
         // Tile effect filters
         "CIKaleidoscope": kaleidoscopeWGSL,
+        "CIAffineTile": affineTileWGSL,
+        "CIAffineClamp": affineClampWGSL,
+        "CIFourfoldReflectedTile": fourfoldReflectedTileWGSL,
+        "CIFourfoldRotatedTile": fourfoldRotatedTileWGSL,
+        "CIFourfoldTranslatedTile": fourfoldTranslatedTileWGSL,
+        "CISixfoldReflectedTile": sixfoldReflectedTileWGSL,
+        "CISixfoldRotatedTile": sixfoldRotatedTileWGSL,
+        "CITriangleTile": triangleTileWGSL,
+        "CIOpTile": opTileWGSL,
+        "CIParallelogramTile": parallelogramTileWGSL,
+        "CITriangleKaleidoscope": triangleKaleidoscopeWGSL,
+        "CIGlideReflectedTile": glideReflectedTileWGSL,
 
         // Stylizing filters
         "CIPixellate": pixellateWGSL,
@@ -162,6 +174,12 @@ internal struct WGSLShaderRegistry {
 
         // Transition filters
         "CIDissolveTransition": dissolveTransitionWGSL,
+        "CISwipeTransition": swipeTransitionWGSL,
+        "CIBarsSwipeTransition": barsSwipeTransitionWGSL,
+        "CIModTransition": modTransitionWGSL,
+        "CIFlashTransition": flashTransitionWGSL,
+        "CICopyMachineTransition": copyMachineTransitionWGSL,
+        "CIRippleTransition": rippleTransitionWGSL,
 
         // Sharpening filters
         "CISharpenLuminance": sharpenLuminanceWGSL,
@@ -170,6 +188,10 @@ internal struct WGSLShaderRegistry {
         // Geometry adjustment filters
         "CICrop": cropWGSL,
         "CIAffineTransform": affineTransformWGSL,
+        "CIStraighten": straightenWGSL,
+        "CIPerspectiveTransform": perspectiveTransformWGSL,
+        "CIPerspectiveCorrection": perspectiveCorrectionWGSL,
+        "CILanczosScaleTransform": lanczosScaleTransformWGSL,
     ]
 
     // MARK: - Utility Shaders
@@ -3464,6 +3486,664 @@ internal struct WGSLShaderRegistry {
     }
     """
 
+    private static let affineTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Inverse transform matrix (for output-to-input mapping)
+        invA: f32,
+        invB: f32,
+        invC: f32,
+        invD: f32,
+        invTx: f32,
+        invTy: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let x = f32(coords.x);
+        let y = f32(coords.y);
+
+        // Apply inverse affine transform
+        let srcX = params.invA * x + params.invC * y + params.invTx;
+        let srcY = params.invB * x + params.invD * y + params.invTy;
+
+        // Tile by wrapping coordinates
+        let w = f32(params.width);
+        let h = f32(params.height);
+        let tiledX = ((srcX % w) + w) % w;
+        let tiledY = ((srcY % h) + h) % h;
+
+        let sourceCoords = vec2<i32>(i32(tiledX), i32(tiledY));
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let affineClampWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Inverse transform matrix
+        invA: f32,
+        invB: f32,
+        invC: f32,
+        invD: f32,
+        invTx: f32,
+        invTy: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let x = f32(coords.x);
+        let y = f32(coords.y);
+
+        // Apply inverse affine transform
+        let srcX = params.invA * x + params.invC * y + params.invTx;
+        let srcY = params.invB * x + params.invD * y + params.invTy;
+
+        // Clamp to edge (extend edge pixels infinitely)
+        let clampedX = clamp(i32(srcX), 0, i32(params.width) - 1);
+        let clampedY = clamp(i32(srcY), 0, i32(params.height) - 1);
+
+        let color = textureLoad(inputTexture, vec2<i32>(clampedX, clampedY), 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let fourfoldReflectedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        acuteAngle: f32,
+        tileWidth: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        var rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Get tile coordinates
+        let tileX = rotated.x / params.tileWidth;
+        let tileY = rotated.y / params.tileWidth;
+
+        // Fourfold reflection - reflect in both X and Y based on quadrant
+        var localX = fract(abs(tileX)) * params.tileWidth;
+        var localY = fract(abs(tileY)) * params.tileWidth;
+
+        // Apply reflection based on which quadrant
+        let quadX = i32(floor(abs(tileX))) % 2;
+        let quadY = i32(floor(abs(tileY))) % 2;
+
+        if (quadX == 1) {
+            localX = params.tileWidth - localX;
+        }
+        if (quadY == 1) {
+            localY = params.tileWidth - localY;
+        }
+
+        // Rotate back
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(localX * cosB - localY * sinB, localX * sinB + localY * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let fourfoldRotatedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        acuteAngle: f32,
+        tileWidth: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        var rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Get tile coordinates
+        let tileX = floor(rotated.x / params.tileWidth);
+        let tileY = floor(rotated.y / params.tileWidth);
+
+        // Local coordinates within tile
+        var localX = rotated.x - tileX * params.tileWidth;
+        var localY = rotated.y - tileY * params.tileWidth;
+
+        // Fourfold rotation - rotate based on quadrant (90 degree increments)
+        let quadrant = ((i32(tileX) % 2) + (i32(tileY) % 2) * 2 + 4) % 4;
+        let rotAngle = f32(quadrant) * 1.5707963;
+
+        let cosR = cos(rotAngle);
+        let sinR = sin(rotAngle);
+        let rotLocal = vec2<f32>(
+            (localX - params.tileWidth * 0.5) * cosR - (localY - params.tileWidth * 0.5) * sinR,
+            (localX - params.tileWidth * 0.5) * sinR + (localY - params.tileWidth * 0.5) * cosR
+        ) + params.tileWidth * 0.5;
+
+        // Rotate back to original orientation
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(rotLocal.x * cosB - rotLocal.y * sinB, rotLocal.x * sinB + rotLocal.y * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let fourfoldTranslatedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        acuteAngle: f32,
+        tileWidth: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        var rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Simple tiling with translation offset
+        var localX = ((rotated.x % params.tileWidth) + params.tileWidth) % params.tileWidth;
+        var localY = ((rotated.y % params.tileWidth) + params.tileWidth) % params.tileWidth;
+
+        // Apply offset for odd rows
+        let tileY = floor(rotated.y / params.tileWidth);
+        if (i32(tileY) % 2 == 1) {
+            localX = ((localX + params.tileWidth * 0.5) % params.tileWidth);
+        }
+
+        // Rotate back
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(localX * cosB - localY * sinB, localX * sinB + localY * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let sixfoldReflectedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Convert to polar
+        var angle = atan2(p.y, p.x) - params.angle;
+        let dist = length(p);
+
+        // Sixfold symmetry (60 degree segments)
+        let segmentAngle = 1.0471975512; // pi/3
+        angle = ((angle % segmentAngle) + segmentAngle) % segmentAngle;
+
+        // Reflect in middle of segment
+        if (angle > segmentAngle * 0.5) {
+            angle = segmentAngle - angle;
+        }
+
+        // Convert back and apply tiling
+        let mappedDist = (dist % params.tileWidth);
+        let sourceUV = center + vec2<f32>(cos(angle + params.angle), sin(angle + params.angle)) * mappedDist;
+
+        let sourceCoords = clamp(
+            vec2<i32>(sourceUV),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let sixfoldRotatedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Convert to polar
+        var angle = atan2(p.y, p.x) - params.angle;
+        let dist = length(p);
+
+        // Sixfold rotation (60 degree segments)
+        let segmentAngle = 1.0471975512; // pi/3
+        angle = ((angle % segmentAngle) + segmentAngle) % segmentAngle;
+
+        // Apply tiling by distance
+        let mappedDist = (dist % params.tileWidth);
+
+        // Convert back
+        let sourceUV = center + vec2<f32>(cos(angle + params.angle), sin(angle + params.angle)) * mappedDist;
+
+        let sourceCoords = clamp(
+            vec2<i32>(sourceUV),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let triangleTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        let rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Triangle grid
+        let h = params.tileWidth * 0.866025; // sqrt(3)/2
+        let row = floor(rotated.y / h);
+        let offset = select(0.0, params.tileWidth * 0.5, i32(row) % 2 == 1);
+        let col = floor((rotated.x + offset) / params.tileWidth);
+
+        var localX = rotated.x + offset - col * params.tileWidth;
+        var localY = rotated.y - row * h;
+
+        // Map to triangular region
+        localX = ((localX % params.tileWidth) + params.tileWidth) % params.tileWidth;
+        localY = ((localY % h) + h) % h;
+
+        // Rotate back
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(localX * cosB - localY * sinB, localX * sinB + localY * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let opTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        scale: f32,
+        tileWidth: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        var rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Scale
+        rotated = rotated / params.scale;
+
+        // Op art tile - alternating scale pattern
+        let tileX = floor(rotated.x / params.tileWidth);
+        let tileY = floor(rotated.y / params.tileWidth);
+
+        var localX = rotated.x - tileX * params.tileWidth;
+        var localY = rotated.y - tileY * params.tileWidth;
+
+        // Alternate inversion pattern
+        if ((i32(tileX) + i32(tileY)) % 2 == 1) {
+            localX = params.tileWidth - localX;
+            localY = params.tileWidth - localY;
+        }
+
+        // Scale back and rotate
+        localX = localX * params.scale;
+        localY = localY * params.scale;
+
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(localX * cosB - localY * sinB, localX * sinB + localY * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let parallelogramTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        acuteAngle: f32,
+        tileWidth: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        let rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Shear transformation for parallelogram
+        let shear = tan(params.acuteAngle);
+        let sheared = vec2<f32>(rotated.x - rotated.y * shear, rotated.y);
+
+        // Tile
+        var localX = ((sheared.x % params.tileWidth) + params.tileWidth) % params.tileWidth;
+        var localY = ((sheared.y % params.tileWidth) + params.tileWidth) % params.tileWidth;
+
+        // Unshear
+        let unsheared = vec2<f32>(localX + localY * shear, localY);
+
+        // Rotate back
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(unsheared.x * cosB - unsheared.y * sinB, unsheared.x * sinB + unsheared.y * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let triangleKaleidoscopeWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        size: f32,
+        rotation: f32,
+        decay: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Apply rotation
+        let cosR = cos(-params.rotation);
+        let sinR = sin(-params.rotation);
+        var rotated = vec2<f32>(p.x * cosR - p.y * sinR, p.x * sinR + p.y * cosR);
+
+        // Convert to polar
+        var angle = atan2(rotated.y, rotated.x);
+        let dist = length(rotated);
+
+        // Triangular kaleidoscope - 3 segments with reflections
+        let segmentAngle = 2.0943951; // 2*pi/3
+        angle = ((angle % segmentAngle) + segmentAngle) % segmentAngle;
+
+        // Reflect within segment
+        if (angle > segmentAngle * 0.5) {
+            angle = segmentAngle - angle;
+        }
+
+        // Apply size scaling with decay
+        let scaledDist = (dist % params.size) * pow(params.decay, floor(dist / params.size));
+
+        // Convert back to cartesian
+        let finalAngle = angle + params.rotation;
+        let sourceUV = center + vec2<f32>(cos(finalAngle), sin(finalAngle)) * scaledDist;
+
+        let sourceCoords = clamp(
+            vec2<i32>(sourceUV),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let glideReflectedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by angle
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        let rotated = vec2<f32>(p.x * cosA - p.y * sinA, p.x * sinA + p.y * cosA);
+
+        // Glide reflection - reflect horizontally and shift vertically
+        let tileY = floor(rotated.y / params.tileWidth);
+        var localX = rotated.x;
+        var localY = rotated.y - tileY * params.tileWidth;
+
+        // Apply glide reflection on alternate rows
+        if (i32(tileY) % 2 == 1) {
+            localX = -localX;
+            localX = localX + params.tileWidth * 0.5;
+        }
+
+        // Tile in X direction
+        localX = ((localX % params.tileWidth) + params.tileWidth) % params.tileWidth;
+
+        // Rotate back
+        let cosB = cos(params.angle);
+        let sinB = sin(params.angle);
+        let final = vec2<f32>(localX * cosB - localY * sinB, localX * sinB + localY * cosB);
+
+        let sourceCoords = clamp(
+            vec2<i32>(center + final),
+            vec2<i32>(0),
+            vec2<i32>(i32(params.width) - 1, i32(params.height) - 1)
+        );
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
     // MARK: - Additional Stylizing Shaders
 
     private static let gloomWGSL = """
@@ -3570,6 +4250,349 @@ internal struct WGSLShaderRegistry {
         let targetColor = textureLoad(targetTexture, coords, 0);
 
         let result = mix(sourceColor, targetColor, clamp(params.time, 0.0, 1.0));
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let swipeTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        angle: f32,
+        swipeWidth: f32,
+        opacity: f32,
+        colorR: f32,
+        colorG: f32,
+        colorB: f32,
+        colorA: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let uv = vec2<f32>(f32(coords.x) / f32(params.width), f32(coords.y) / f32(params.height));
+        let sourceColor = textureLoad(inputTexture, coords, 0);
+        let targetColor = textureLoad(targetTexture, coords, 0);
+        let swipeColor = vec4<f32>(params.colorR, params.colorG, params.colorB, params.colorA);
+
+        // Calculate swipe position based on angle
+        let cosA = cos(params.angle);
+        let sinA = sin(params.angle);
+        let rotatedPos = uv.x * cosA + uv.y * sinA;
+
+        // Transition progress (0 to 1 mapped to full image diagonal)
+        let diagonal = sqrt(2.0);
+        let progress = params.time * (diagonal + params.swipeWidth / f32(params.width));
+        let edgeStart = progress - params.swipeWidth / f32(params.width);
+
+        var result: vec4<f32>;
+        if (rotatedPos < edgeStart) {
+            result = targetColor;
+        } else if (rotatedPos < progress) {
+            // In the swipe band - blend with swipe color
+            let bandT = (rotatedPos - edgeStart) / (progress - edgeStart);
+            let blended = mix(targetColor, swipeColor, params.opacity * sin(bandT * 3.14159));
+            result = blended;
+        } else {
+            result = sourceColor;
+        }
+
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let barsSwipeTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        angle: f32,
+        barWidth: f32,
+        barOffset: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let sourceColor = textureLoad(inputTexture, coords, 0);
+        let targetColor = textureLoad(targetTexture, coords, 0);
+
+        // Rotate coordinates by angle
+        let cosA = cos(params.angle);
+        let sinA = sin(params.angle);
+        let pos = f32(coords.x) * cosA + f32(coords.y) * sinA;
+
+        // Calculate which bar this pixel is in
+        let barIndex = floor((pos + params.barOffset) / params.barWidth);
+        let barPhase = fract((pos + params.barOffset) / params.barWidth);
+
+        // Alternate bars have different timing offsets
+        let isEvenBar = (i32(barIndex) % 2) == 0;
+        let timeOffset = select(0.3, 0.0, isEvenBar);
+        let adjustedTime = clamp((params.time - timeOffset) / 0.7, 0.0, 1.0);
+
+        // Each bar wipes from one edge
+        let showTarget = barPhase < adjustedTime;
+        let result = select(sourceColor, targetColor, showTarget);
+
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let modTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        radius: f32,
+        compression: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let sourceColor = textureLoad(inputTexture, coords, 0);
+        let targetColor = textureLoad(targetTexture, coords, 0);
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let delta = pos - center;
+
+        // Apply compression to y axis
+        let compressed = vec2<f32>(delta.x, delta.y * params.compression);
+
+        // Rotate by angle
+        let cosA = cos(params.angle);
+        let sinA = sin(params.angle);
+        let rotated = vec2<f32>(
+            compressed.x * cosA - compressed.y * sinA,
+            compressed.x * sinA + compressed.y * cosA
+        );
+
+        // Calculate distance from grid of circles
+        let cellSize = params.radius * 2.0;
+        let cell = floor(rotated / cellSize);
+        let cellCenter = (cell + 0.5) * cellSize;
+        let distToCenter = length(rotated - cellCenter);
+
+        // Circles expand over time
+        let maxRadius = params.radius * params.time * 2.0;
+        let showTarget = distToCenter < maxRadius;
+
+        let result = select(sourceColor, targetColor, showTarget);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let flashTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        centerX: f32,
+        centerY: f32,
+        maxStriationRadius: f32,
+        striationStrength: f32,
+        striationContrast: f32,
+        fadeThreshold: f32,
+        colorR: f32,
+        colorG: f32,
+        colorB: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let sourceColor = textureLoad(inputTexture, coords, 0);
+        let targetColor = textureLoad(targetTexture, coords, 0);
+        let flashColor = vec4<f32>(params.colorR, params.colorG, params.colorB, 1.0);
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let dist = length(pos - center);
+
+        // Flash expands from center
+        let maxDist = length(vec2<f32>(f32(params.width), f32(params.height)));
+
+        // Phase 1: Flash expands (time 0 to 0.5)
+        // Phase 2: Flash fades, target revealed (time 0.5 to 1)
+        var result: vec4<f32>;
+        if (params.time < 0.5) {
+            let flashProgress = params.time * 2.0;
+            let flashRadius = flashProgress * maxDist;
+            let flashIntensity = smoothstep(flashRadius, flashRadius - 50.0, dist);
+
+            // Add striation effect
+            let angle = atan2(pos.y - center.y, pos.x - center.x);
+            let striation = sin(angle * 20.0 + dist * 0.1) * params.striationStrength;
+            let finalIntensity = clamp(flashIntensity + striation * flashIntensity, 0.0, 1.0);
+
+            result = mix(sourceColor, flashColor, finalIntensity);
+        } else {
+            let fadeProgress = (params.time - 0.5) * 2.0;
+            let fadeAmount = 1.0 - fadeProgress;
+            let fadedFlash = mix(targetColor, flashColor, fadeAmount * params.fadeThreshold);
+            result = fadedFlash;
+        }
+
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let copyMachineTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        angle: f32,
+        lightWidth: f32,
+        opacity: f32,
+        colorR: f32,
+        colorG: f32,
+        colorB: f32,
+        colorA: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let sourceColor = textureLoad(inputTexture, coords, 0);
+        let targetColor = textureLoad(targetTexture, coords, 0);
+        let lightColor = vec4<f32>(params.colorR, params.colorG, params.colorB, params.colorA);
+
+        // Calculate position along scan direction
+        let cosA = cos(params.angle);
+        let sinA = sin(params.angle);
+        let pos = f32(coords.x) * cosA + f32(coords.y) * sinA;
+
+        // Light bar moves across the image
+        let maxPos = f32(params.width) * abs(cosA) + f32(params.height) * abs(sinA);
+        let lightCenter = params.time * (maxPos + params.lightWidth) - params.lightWidth * 0.5;
+
+        // Distance from light center
+        let distFromLight = abs(pos - lightCenter);
+        let lightIntensity = max(0.0, 1.0 - distFromLight / (params.lightWidth * 0.5));
+        let smoothLight = lightIntensity * lightIntensity * (3.0 - 2.0 * lightIntensity); // smoothstep
+
+        // Show target where light has passed
+        let showTarget = pos < lightCenter - params.lightWidth * 0.3;
+
+        var result: vec4<f32>;
+        if (showTarget) {
+            result = targetColor;
+        } else {
+            // Add light glow effect
+            let glowColor = mix(sourceColor, lightColor, smoothLight * params.opacity);
+            result = glowColor;
+        }
+
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let rippleTransitionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        time: f32,
+        centerX: f32,
+        centerY: f32,
+        rippleWidth: f32,
+        scale: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var targetTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let delta = pos - center;
+        let dist = length(delta);
+
+        // Ripple expands from center
+        let maxDist = length(vec2<f32>(f32(params.width), f32(params.height)));
+        let rippleRadius = params.time * maxDist * 1.5;
+
+        // Calculate ripple displacement
+        let ripplePhase = (dist - rippleRadius) / params.rippleWidth;
+        let inRipple = abs(ripplePhase) < 1.0;
+        let rippleIntensity = select(0.0, cos(ripplePhase * 3.14159) * 0.5 + 0.5, inRipple);
+
+        // Displacement direction (radial)
+        let dir = select(vec2<f32>(0.0, 0.0), normalize(delta), dist > 0.001);
+        let displacement = dir * rippleIntensity * params.scale;
+
+        // Sample with displacement
+        let samplePos = vec2<i32>(coords) + vec2<i32>(displacement);
+        let clampedPos = clamp(samplePos, vec2<i32>(0, 0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+
+        let sourceColor = textureLoad(inputTexture, clampedPos, 0);
+        let targetColor = textureLoad(targetTexture, clampedPos, 0);
+
+        // Transition happens as ripple passes
+        let showTarget = dist < rippleRadius - params.rippleWidth;
+        let blendZone = dist >= rippleRadius - params.rippleWidth && dist < rippleRadius;
+        let blendT = select(0.0, 1.0 - (dist - (rippleRadius - params.rippleWidth)) / params.rippleWidth, blendZone);
+
+        var result: vec4<f32>;
+        if (showTarget) {
+            result = targetColor;
+        } else if (blendZone) {
+            result = mix(sourceColor, targetColor, blendT);
+        } else {
+            result = sourceColor;
+        }
+
         textureStore(outputTexture, coords, result);
     }
     """
@@ -4295,6 +5318,230 @@ internal struct WGSLShaderRegistry {
 
         let color = textureLoad(inputTexture, inCoords, 0);
         textureStore(outputTexture, vec2<i32>(gid.xy), color);
+    }
+    """
+
+    private static let straightenWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        angle: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(f32(params.width) * 0.5, f32(params.height) * 0.5);
+        let p = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate by negative angle (to straighten)
+        let cosA = cos(-params.angle);
+        let sinA = sin(-params.angle);
+        let rotated = vec2<f32>(
+            p.x * cosA - p.y * sinA,
+            p.x * sinA + p.y * cosA
+        ) + center;
+
+        let sourceCoords = vec2<i32>(rotated);
+        let dims = textureDimensions(inputTexture);
+
+        if (sourceCoords.x < 0 || sourceCoords.x >= i32(dims.x) ||
+            sourceCoords.y < 0 || sourceCoords.y >= i32(dims.y)) {
+            textureStore(outputTexture, coords, vec4<f32>(0.0));
+            return;
+        }
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let perspectiveTransformWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Perspective matrix elements (3x3, row-major, inverse for output->input)
+        m00: f32,
+        m01: f32,
+        m02: f32,
+        m10: f32,
+        m11: f32,
+        m12: f32,
+        m20: f32,
+        m21: f32,
+        m22: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let outX = f32(coords.x);
+        let outY = f32(coords.y);
+
+        // Apply perspective transform (homogeneous coordinates)
+        let w = params.m20 * outX + params.m21 * outY + params.m22;
+        if (abs(w) < 0.0001) {
+            textureStore(outputTexture, coords, vec4<f32>(0.0));
+            return;
+        }
+
+        let inX = (params.m00 * outX + params.m01 * outY + params.m02) / w;
+        let inY = (params.m10 * outX + params.m11 * outY + params.m12) / w;
+
+        let sourceCoords = vec2<i32>(i32(inX), i32(inY));
+        let dims = textureDimensions(inputTexture);
+
+        if (sourceCoords.x < 0 || sourceCoords.x >= i32(dims.x) ||
+            sourceCoords.y < 0 || sourceCoords.y >= i32(dims.y)) {
+            textureStore(outputTexture, coords, vec4<f32>(0.0));
+            return;
+        }
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let perspectiveCorrectionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Source quad corners (topLeft, topRight, bottomRight, bottomLeft)
+        tlX: f32,
+        tlY: f32,
+        trX: f32,
+        trY: f32,
+        brX: f32,
+        brY: f32,
+        blX: f32,
+        blY: f32,
+        // Destination quad (typically the output bounds)
+        dstX: f32,
+        dstY: f32,
+        dstW: f32,
+        dstH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Normalize output coordinates
+        let u = (f32(coords.x) - params.dstX) / params.dstW;
+        let v = (f32(coords.y) - params.dstY) / params.dstH;
+
+        if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
+            textureStore(outputTexture, coords, vec4<f32>(0.0));
+            return;
+        }
+
+        // Bilinear interpolation of quad corners
+        let topX = mix(params.tlX, params.trX, u);
+        let topY = mix(params.tlY, params.trY, u);
+        let bottomX = mix(params.blX, params.brX, u);
+        let bottomY = mix(params.blY, params.brY, u);
+
+        let inX = mix(topX, bottomX, v);
+        let inY = mix(topY, bottomY, v);
+
+        let sourceCoords = vec2<i32>(i32(inX), i32(inY));
+        let dims = textureDimensions(inputTexture);
+
+        if (sourceCoords.x < 0 || sourceCoords.x >= i32(dims.x) ||
+            sourceCoords.y < 0 || sourceCoords.y >= i32(dims.y)) {
+            textureStore(outputTexture, coords, vec4<f32>(0.0));
+            return;
+        }
+
+        let color = textureLoad(inputTexture, sourceCoords, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let lanczosScaleTransformWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        scaleX: f32,
+        scaleY: f32,
+        aspectRatio: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    fn lanczosWeight(x: f32, a: f32) -> f32 {
+        if (abs(x) < 0.0001) { return 1.0; }
+        if (abs(x) >= a) { return 0.0; }
+        let pi = 3.14159265;
+        let pix = pi * x;
+        return (sin(pix) / pix) * (sin(pix / a) / (pix / a));
+    }
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let dims = textureDimensions(inputTexture);
+
+        // Map output coordinate to input coordinate
+        let inX = f32(coords.x) / params.scaleX;
+        let inY = f32(coords.y) / params.scaleY;
+
+        // Lanczos-3 kernel (a=3)
+        let a = 3.0;
+        let startX = i32(floor(inX - a + 1.0));
+        let startY = i32(floor(inY - a + 1.0));
+
+        var color = vec4<f32>(0.0);
+        var weightSum = 0.0;
+
+        // Sample surrounding pixels with Lanczos weights
+        for (var dy = 0; dy < 6; dy = dy + 1) {
+            for (var dx = 0; dx < 6; dx = dx + 1) {
+                let sx = startX + dx;
+                let sy = startY + dy;
+
+                if (sx >= 0 && sx < i32(dims.x) && sy >= 0 && sy < i32(dims.y)) {
+                    let wx = lanczosWeight(inX - f32(sx), a);
+                    let wy = lanczosWeight(inY - f32(sy), a);
+                    let w = wx * wy;
+
+                    color = color + textureLoad(inputTexture, vec2<i32>(sx, sy), 0) * w;
+                    weightSum = weightSum + w;
+                }
+            }
+        }
+
+        if (weightSum > 0.0) {
+            color = color / weightSum;
+        }
+
+        textureStore(outputTexture, coords, clamp(color, vec4<f32>(0.0), vec4<f32>(1.0)));
     }
     """
 }
