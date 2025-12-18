@@ -28,6 +28,7 @@ public final class CIImage: @unchecked Sendable {
     internal let _color: CIColor?
     internal let _url: URL?
     internal let _data: Data?
+    internal let _pixelData: Data?  // Decoded RGBA pixel data for GPU upload
     internal let _properties: [String: Any]
     internal let _transform: CGAffineTransform
     internal let _filters: [(name: String, parameters: [String: Any])]
@@ -66,6 +67,7 @@ public final class CIImage: @unchecked Sendable {
         color: CIColor? = nil,
         url: URL? = nil,
         data: Data? = nil,
+        pixelData: Data? = nil,
         properties: [String: Any] = [:],
         transform: CGAffineTransform = .identity,
         filters: [(name: String, parameters: [String: Any])] = [],
@@ -80,6 +82,7 @@ public final class CIImage: @unchecked Sendable {
         self._color = color
         self._url = url
         self._data = data
+        self._pixelData = pixelData
         self._properties = properties
         self._transform = transform
         self._filters = filters
@@ -97,8 +100,12 @@ public final class CIImage: @unchecked Sendable {
     /// Initializes an image object by reading an image from a URL, using the specified options.
     public convenience init?(contentsOf url: URL, options: [CIImageOption: Any]?) {
         guard let data = try? Data(contentsOf: url) else { return nil }
+
+        // Try to detect image dimensions from file headers
+        let extent = CIImage.detectImageExtent(from: data)
+
         self.init(
-            extent: CGRect(x: 0, y: 0, width: 0, height: 0),
+            extent: extent,
             url: url,
             data: data,
             properties: options?.reduce(into: [:]) { $0[$1.key.rawValue] = $1.value } ?? [:]
@@ -128,8 +135,11 @@ public final class CIImage: @unchecked Sendable {
 
     /// Initializes an image object with the supplied image data, using the specified options.
     public convenience init?(data: Data, options: [CIImageOption: Any]?) {
+        // Try to detect image dimensions from file headers
+        let extent = CIImage.detectImageExtent(from: data)
+
         self.init(
-            extent: CGRect(x: 0, y: 0, width: 0, height: 0),
+            extent: extent,
             data: data,
             properties: options?.reduce(into: [:]) { $0[$1.key.rawValue] = $1.value } ?? [:]
         )
@@ -157,6 +167,193 @@ public final class CIImage: @unchecked Sendable {
             extent: CGRect.infinite,
             color: color
         )
+    }
+
+    // MARK: - Async Factory Methods (WASM)
+
+    #if arch(wasm32)
+    /// Asynchronously creates a CIImage from encoded image data.
+    /// This method fully decodes the image data using browser APIs.
+    ///
+    /// - Parameter data: The encoded image data (JPEG, PNG, WebP, etc.).
+    /// - Returns: A CIImage with decoded pixel data ready for GPU processing.
+    /// - Throws: An error if decoding fails.
+    public static func decoded(from data: Data) async throws -> CIImage {
+        let decoded = try await ImageDecoder.decode(data)
+        let extent = CGRect(x: 0, y: 0, width: CGFloat(decoded.width), height: CGFloat(decoded.height))
+
+        return CIImage(
+            extent: extent,
+            data: data,
+            pixelData: decoded.pixelData
+        )
+    }
+
+    /// Asynchronously creates a CIImage from a URL.
+    /// This method fully decodes the image using browser APIs.
+    ///
+    /// - Parameter url: The URL of the image file.
+    /// - Returns: A CIImage with decoded pixel data ready for GPU processing.
+    /// - Throws: An error if loading or decoding fails.
+    public static func decoded(contentsOf url: URL) async throws -> CIImage {
+        let data = try Data(contentsOf: url)
+        let decoded = try await ImageDecoder.decode(data)
+        let extent = CGRect(x: 0, y: 0, width: CGFloat(decoded.width), height: CGFloat(decoded.height))
+
+        return CIImage(
+            extent: extent,
+            url: url,
+            data: data,
+            pixelData: decoded.pixelData
+        )
+    }
+    #endif
+
+    // MARK: - Image Dimension Detection
+
+    /// Detects image dimensions from file header bytes.
+    /// Supports PNG, JPEG, GIF, WebP, and BMP formats.
+    internal static func detectImageExtent(from data: Data) -> CGRect {
+        if let dims = detectPNGDimensions(from: data) {
+            return CGRect(x: 0, y: 0, width: CGFloat(dims.width), height: CGFloat(dims.height))
+        }
+        if let dims = detectJPEGDimensions(from: data) {
+            return CGRect(x: 0, y: 0, width: CGFloat(dims.width), height: CGFloat(dims.height))
+        }
+        if let dims = detectGIFDimensions(from: data) {
+            return CGRect(x: 0, y: 0, width: CGFloat(dims.width), height: CGFloat(dims.height))
+        }
+        if let dims = detectWebPDimensions(from: data) {
+            return CGRect(x: 0, y: 0, width: CGFloat(dims.width), height: CGFloat(dims.height))
+        }
+        if let dims = detectBMPDimensions(from: data) {
+            return CGRect(x: 0, y: 0, width: CGFloat(dims.width), height: CGFloat(dims.height))
+        }
+        return .zero
+    }
+
+    /// Detects PNG image dimensions from header.
+    private static func detectPNGDimensions(from data: Data) -> (width: Int, height: Int)? {
+        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+        guard data.count >= 24 else { return nil }
+
+        let signature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        for (i, byte) in signature.enumerated() {
+            guard data[i] == byte else { return nil }
+        }
+
+        // IHDR chunk: bytes 16-19 = width, bytes 20-23 = height (big-endian)
+        let width = Int(data[16]) << 24 | Int(data[17]) << 16 | Int(data[18]) << 8 | Int(data[19])
+        let height = Int(data[20]) << 24 | Int(data[21]) << 16 | Int(data[22]) << 8 | Int(data[23])
+
+        guard width > 0 && height > 0 else { return nil }
+        return (width, height)
+    }
+
+    /// Detects JPEG image dimensions from header.
+    private static func detectJPEGDimensions(from data: Data) -> (width: Int, height: Int)? {
+        guard data.count >= 2, data[0] == 0xFF, data[1] == 0xD8 else { return nil }
+
+        var offset = 2
+        while offset < data.count - 8 {
+            guard data[offset] == 0xFF else {
+                offset += 1
+                continue
+            }
+
+            let marker = data[offset + 1]
+
+            if marker == 0xFF {
+                offset += 1
+                continue
+            }
+
+            // SOF markers contain dimensions
+            if marker >= 0xC0 && marker <= 0xC3 {
+                guard offset + 9 < data.count else { return nil }
+                let height = Int(data[offset + 5]) << 8 | Int(data[offset + 6])
+                let width = Int(data[offset + 7]) << 8 | Int(data[offset + 8])
+                guard width > 0 && height > 0 else { return nil }
+                return (width, height)
+            }
+
+            // Skip to next marker
+            if marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7) {
+                offset += 2
+            } else {
+                guard offset + 3 < data.count else { return nil }
+                let length = Int(data[offset + 2]) << 8 | Int(data[offset + 3])
+                offset += 2 + length
+            }
+        }
+        return nil
+    }
+
+    /// Detects GIF image dimensions from header.
+    private static func detectGIFDimensions(from data: Data) -> (width: Int, height: Int)? {
+        // GIF87a or GIF89a
+        guard data.count >= 10 else { return nil }
+        guard data[0] == 0x47, data[1] == 0x49, data[2] == 0x46,
+              data[3] == 0x38, (data[4] == 0x37 || data[4] == 0x39), data[5] == 0x61 else {
+            return nil
+        }
+        // Width and height are at bytes 6-7 and 8-9 (little-endian)
+        let width = Int(data[6]) | Int(data[7]) << 8
+        let height = Int(data[8]) | Int(data[9]) << 8
+        guard width > 0 && height > 0 else { return nil }
+        return (width, height)
+    }
+
+    /// Detects WebP image dimensions from header.
+    private static func detectWebPDimensions(from data: Data) -> (width: Int, height: Int)? {
+        // RIFF....WEBP
+        guard data.count >= 30 else { return nil }
+        guard data[0] == 0x52, data[1] == 0x49, data[2] == 0x46, data[3] == 0x46,
+              data[8] == 0x57, data[9] == 0x45, data[10] == 0x42, data[11] == 0x50 else {
+            return nil
+        }
+
+        // Check for VP8 (lossy), VP8L (lossless), or VP8X (extended)
+        if data[12] == 0x56, data[13] == 0x50, data[14] == 0x38 {
+            if data[15] == 0x20 { // VP8 (lossy)
+                guard data.count >= 30 else { return nil }
+                // Skip to frame header
+                let width = (Int(data[26]) | Int(data[27]) << 8) & 0x3FFF
+                let height = (Int(data[28]) | Int(data[29]) << 8) & 0x3FFF
+                guard width > 0 && height > 0 else { return nil }
+                return (width, height)
+            } else if data[15] == 0x4C { // VP8L (lossless)
+                guard data.count >= 25 else { return nil }
+                let b0 = Int(data[21])
+                let b1 = Int(data[22])
+                let b2 = Int(data[23])
+                let b3 = Int(data[24])
+                let width = ((b1 & 0x3F) << 8 | b0) + 1
+                let height = ((b3 & 0x0F) << 10 | b2 << 2 | (b1 >> 6)) + 1
+                guard width > 0 && height > 0 else { return nil }
+                return (width, height)
+            } else if data[15] == 0x58 { // VP8X (extended)
+                guard data.count >= 30 else { return nil }
+                let width = (Int(data[24]) | Int(data[25]) << 8 | Int(data[26]) << 16) + 1
+                let height = (Int(data[27]) | Int(data[28]) << 8 | Int(data[29]) << 16) + 1
+                guard width > 0 && height > 0 else { return nil }
+                return (width, height)
+            }
+        }
+        return nil
+    }
+
+    /// Detects BMP image dimensions from header.
+    private static func detectBMPDimensions(from data: Data) -> (width: Int, height: Int)? {
+        // BM signature
+        guard data.count >= 26, data[0] == 0x42, data[1] == 0x4D else { return nil }
+        // Width at bytes 18-21, height at bytes 22-25 (little-endian, signed for height)
+        let width = Int(data[18]) | Int(data[19]) << 8 | Int(data[20]) << 16 | Int(data[21]) << 24
+        var height = Int(data[22]) | Int(data[23]) << 8 | Int(data[24]) << 16 | Int(data[25]) << 24
+        // Height can be negative (top-down DIB)
+        if height < 0 { height = -height }
+        guard width > 0 && height > 0 else { return nil }
+        return (width, height)
     }
 
     // MARK: - Getting Image Information
@@ -222,6 +419,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: newFilters
@@ -290,19 +488,9 @@ public final class CIImage: @unchecked Sendable {
 
     /// Returns a new image that represents the original image after applying an affine transform.
     public func transformed(by matrix: CGAffineTransform) -> CIImage {
-        let newTransform = _transform.concatenating(matrix)
-        let newExtent = _extent.applying(matrix)
-        return CIImage(
-            extent: newExtent,
-            colorSpace: _colorSpace,
-            cgImage: _cgImage,
-            color: _color,
-            url: _url,
-            data: _data,
-            properties: _properties,
-            transform: newTransform,
-            filters: _filters
-        )
+        applyingFilter("CIAffineTransform", parameters: [
+            kCIInputTransformKey: matrix
+        ])
     }
 
     /// Returns a new image that represents the original image after applying an affine transform.
@@ -312,18 +500,9 @@ public final class CIImage: @unchecked Sendable {
 
     /// Returns a new image with a cropped portion of the original image.
     public func cropped(to rect: CGRect) -> CIImage {
-        let newExtent = _extent.intersection(rect)
-        return CIImage(
-            extent: newExtent,
-            colorSpace: _colorSpace,
-            cgImage: _cgImage,
-            color: _color,
-            url: _url,
-            data: _data,
-            properties: _properties,
-            transform: _transform,
-            filters: _filters
-        )
+        applyingFilter("CICrop", parameters: [
+            "inputRectangle": CIVector(cgRect: rect)
+        ])
     }
 
     /// Returns a new image created by transforming the original image to the specified EXIF orientation.
@@ -392,6 +571,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: newProperties,
             transform: _transform,
             filters: _filters
@@ -412,6 +592,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,
@@ -429,6 +610,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,
@@ -448,6 +630,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters
@@ -463,6 +646,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters
@@ -495,19 +679,19 @@ public final class CIImage: @unchecked Sendable {
         case 1: // Up
             return .identity
         case 2: // Up Mirrored
-            return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -width.native, y: 0)
+            return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -width, y: 0)
         case 3: // Down
-            return CGAffineTransform(translationX: width.native, y: height.native).rotated(by: .pi)
+            return CGAffineTransform(translationX: width, y: height).rotated(by: .pi)
         case 4: // Down Mirrored
-            return CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -height.native)
+            return CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -height)
         case 5: // Left Mirrored
             return CGAffineTransform(scaleX: -1, y: 1).rotated(by: -.pi / 2)
         case 6: // Right
-            return CGAffineTransform(translationX: height.native, y: 0).rotated(by: .pi / 2)
+            return CGAffineTransform(translationX: height, y: 0).rotated(by: .pi / 2)
         case 7: // Right Mirrored
-            return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -height.native, y: 0).rotated(by: .pi / 2)
+            return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -height, y: 0).rotated(by: .pi / 2)
         case 8: // Left
-            return CGAffineTransform(translationX: 0, y: width.native).rotated(by: -.pi / 2)
+            return CGAffineTransform(translationX: 0, y: width).rotated(by: -.pi / 2)
         default:
             return .identity
         }
@@ -524,6 +708,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,
@@ -541,6 +726,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,
@@ -567,6 +753,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,
@@ -586,6 +773,7 @@ public final class CIImage: @unchecked Sendable {
             color: _color,
             url: _url,
             data: _data,
+            pixelData: _pixelData,
             properties: _properties,
             transform: _transform,
             filters: _filters,

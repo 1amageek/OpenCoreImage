@@ -238,11 +238,16 @@ internal actor FilterGraphCompiler {
             textureViews.append(outputTextureView)
 
             // Create uniform buffer
+            // For the first pass, use the node's input extent for coordinate transformations
+            // For subsequent passes (e.g., separable blur), the intermediate textures have
+            // the same extent as the output, so we can use the node's output extent
+            let extentForEncoding = (index == 0) ? node.inputExtent : node.outputExtent
             let uniformData = UniformBufferEncoder.encode(
                 filterName: filter.name,
                 parameters: filter.parameters,
                 imageWidth: Int(width),
-                imageHeight: Int(height)
+                imageHeight: Int(height),
+                inputExtent: extentForEncoding
             )
             let uniformBuffer = createUniformBuffer(device: device, data: uniformData)
             uniformBuffers.append(uniformBuffer)

@@ -26,7 +26,7 @@ let package = Package(
             name: "OpenCoreImage",
             dependencies: [
                 "OpenCoreGraphics",
-                .product(name: "SwiftWebGPU", package: "swift-webgpu"),
+                .product(name: "SwiftWebGPU", package: "swift-webgpu", condition: .when(platforms: [.wasi])),
             ]
         ),
         .testTarget(

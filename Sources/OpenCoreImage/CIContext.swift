@@ -156,29 +156,11 @@ public final class CIContext: @unchecked Sendable {
         }
 
         #if arch(wasm32)
-        // Use WebGPU rendering for filter chains
-        // Note: For synchronous API compatibility, we use a blocking approach
-        // Prefer using createCGImageAsync for async contexts
-        let box = UncheckedSendableBox<CGImage?>(nil)
-        let semaphore = DispatchSemaphore(value: 0)
-
-        Task { @MainActor in
-            do {
-                let rendered = try await self.renderToCGImageAsync(
-                    image: image,
-                    fromRect: fromRect,
-                    format: format,
-                    colorSpace: colorSpace
-                )
-                box.value = rendered
-            } catch {
-                // Rendering failed, value stays nil
-            }
-            semaphore.signal()
-        }
-
-        semaphore.wait()
-        return box.value
+        // On WASM, synchronous rendering with filter chains is not supported
+        // because DispatchSemaphore is not available in single-threaded WASM.
+        // Use createCGImageAsync() for filter chain rendering instead.
+        // For images without filters, the early returns above will handle them.
+        return nil
         #else
         // Non-WASM: filter chain rendering not available
         return nil
@@ -319,8 +301,8 @@ public final class CIContext: @unchecked Sendable {
 
             let texture = compiledGraph.textures[textureIndex]
 
-            // Get pixel data from source image
-            let pixelData = getPixelData(from: sourceImage, width: width, height: height)
+            // Get pixel data from source image (may decode on-demand)
+            let pixelData = try await getPixelData(from: sourceImage, width: width, height: height)
 
             // Convert Data to JavaScript Uint8Array for WebGPU (optimized bulk transfer)
             let jsData = JSDataTransfer.toUint8Array(pixelData)
@@ -342,17 +324,26 @@ public final class CIContext: @unchecked Sendable {
         }
     }
 
-    private func getPixelData(from image: CIImage, width: Int, height: Int) -> Data {
+    private func getPixelData(from image: CIImage, width: Int, height: Int) async throws -> Data {
+        // First priority: decoded pixel data (already RGBA)
+        if let pixelData = image._pixelData, !pixelData.isEmpty {
+            return pixelData
+        }
+        // Second priority: CGImage source
         if let cgImage = image.cgImage {
             return extractPixelData(from: cgImage, width: width, height: height)
-        } else if let color = image._color {
-            return createSolidColorData(color: color, width: width, height: height)
-        } else if let sourceData = image._data {
-            return sourceData
-        } else {
-            // Create transparent pixels as fallback
-            return Data(count: width * height * 4)
         }
+        // Third priority: solid color
+        if let color = image._color {
+            return createSolidColorData(color: color, width: width, height: height)
+        }
+        // Fourth priority: decode from raw image data on-demand
+        if let rawData = image._data, !rawData.isEmpty {
+            let decoded = try await ImageDecoder.decode(rawData)
+            return decoded.pixelData
+        }
+        // Fallback: transparent pixels
+        return Data(count: width * height * 4)
     }
 
     private func executeFilterGraph(
@@ -480,7 +471,7 @@ public final class CIContext: @unchecked Sendable {
                 bitsPerComponent: 8,
                 bytesPerRow: bytesPerRow,
                 space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
             ) else { return }
 
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
@@ -506,9 +497,7 @@ public final class CIContext: @unchecked Sendable {
         }
         #else
         // On WASM, use OpenCoreGraphics which accepts Data directly
-        guard let dataProvider = CGDataProvider(data: data) else {
-            return nil
-        }
+        let dataProvider = CGDataProvider(data: data)
         #endif
 
         return CGImage(
@@ -617,7 +606,7 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Placeholder implementation
+        // Synchronous encoding not available - use jpegRepresentationAsync on WASM
         nil
     }
 
@@ -628,9 +617,106 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Placeholder implementation
+        // Synchronous encoding not available - use pngRepresentationAsync on WASM
         nil
     }
+
+    #if arch(wasm32)
+    // MARK: - Async Image Representation (WASM)
+
+    /// Asynchronously renders the image and exports the resulting image data in PNG format.
+    ///
+    /// - Parameters:
+    ///   - image: The CIImage to render.
+    ///   - format: The pixel format.
+    ///   - colorSpace: The color space.
+    ///   - options: Export options.
+    /// - Returns: PNG encoded data.
+    public func pngRepresentationAsync(
+        of image: CIImage,
+        format: CIFormat = .RGBA8,
+        colorSpace: CGColorSpace? = nil,
+        options: [CIImageRepresentationOption: Any] = [:]
+    ) async throws -> Data {
+        let rect = image.extent
+        guard !rect.isInfinite && !rect.isEmpty else {
+            throw CIError.invalidArgument
+        }
+
+        // Render the image to get pixel data
+        let cgImage = try await createCGImageAsync(image, from: rect, format: format, colorSpace: colorSpace)
+
+        // Extract pixel data from CGImage
+        let width = Int(rect.width)
+        let height = Int(rect.height)
+        let pixelData = extractPixelData(from: cgImage, width: width, height: height)
+
+        // Encode to PNG using browser APIs
+        return try await ImageEncoder.encodePNG(pixelData: pixelData, width: width, height: height)
+    }
+
+    /// Asynchronously renders the image and exports the resulting image data in JPEG format.
+    ///
+    /// - Parameters:
+    ///   - image: The CIImage to render.
+    ///   - colorSpace: The color space.
+    ///   - options: Export options (supports `.jpegQuality`).
+    /// - Returns: JPEG encoded data.
+    public func jpegRepresentationAsync(
+        of image: CIImage,
+        colorSpace: CGColorSpace? = nil,
+        options: [CIImageRepresentationOption: Any] = [:]
+    ) async throws -> Data {
+        let rect = image.extent
+        guard !rect.isInfinite && !rect.isEmpty else {
+            throw CIError.invalidArgument
+        }
+
+        // Get quality from options
+        let quality: Float
+        if let q = options[.jpegQuality] as? Float {
+            quality = q
+        } else if let q = options[.jpegQuality] as? Double {
+            quality = Float(q)
+        } else {
+            quality = 0.92
+        }
+
+        // Render the image to get pixel data
+        let cgImage = try await createCGImageAsync(image, from: rect, format: .RGBA8, colorSpace: colorSpace)
+
+        // Extract pixel data from CGImage
+        let width = Int(rect.width)
+        let height = Int(rect.height)
+        let pixelData = extractPixelData(from: cgImage, width: width, height: height)
+
+        // Encode to JPEG using browser APIs
+        return try await ImageEncoder.encodeJPEG(pixelData: pixelData, width: width, height: height, quality: quality)
+    }
+
+    /// Asynchronously writes the image to a file in PNG format.
+    public func writePNGRepresentationAsync(
+        of image: CIImage,
+        to url: URL,
+        format: CIFormat = .RGBA8,
+        colorSpace: CGColorSpace? = nil,
+        options: [CIImageRepresentationOption: Any] = [:]
+    ) async throws {
+        let data = try await pngRepresentationAsync(of: image, format: format, colorSpace: colorSpace, options: options)
+        try data.write(to: url)
+    }
+
+    /// Asynchronously writes the image to a file in JPEG format.
+    public func writeJPEGRepresentationAsync(
+        of image: CIImage,
+        to url: URL,
+        colorSpace: CGColorSpace? = nil,
+        options: [CIImageRepresentationOption: Any] = [:]
+    ) async throws {
+        let data = try await jpegRepresentationAsync(of: image, colorSpace: colorSpace, options: options)
+        try data.write(to: url)
+    }
+    #endif
 
     /// Renders the image and exports the resulting image data in HEIF format.
     public func heifRepresentation(

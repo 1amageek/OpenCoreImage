@@ -29,6 +29,14 @@ internal struct FilterGraphNode: Identifiable {
 
     /// Source image data (only for source nodes).
     let sourceImage: CIImage?
+
+    /// The extent of the primary input for this node (for coordinate transformations).
+    /// For source nodes, this is the source image extent.
+    /// For filter nodes, this is the output extent of the primary input node.
+    let inputExtent: CGRect
+
+    /// The output extent of this node after applying the filter.
+    let outputExtent: CGRect
 }
 
 /// Represents an input to a filter node.
@@ -137,6 +145,7 @@ internal struct FilterGraphBuilder {
             color: image._color,
             url: image._url,
             data: image._data,
+            pixelData: image._pixelData,
             properties: image._properties,
             transform: image._transform,
             filters: []  // No filters
@@ -148,13 +157,17 @@ internal struct FilterGraphBuilder {
         let nodeId = nextNodeId
         nextNodeId += 1
 
+        let extent = image._extent
+
         let node = FilterGraphNode(
             id: nodeId,
             filterName: "Source",
             parameters: [:],
             inputs: [:],
             isSource: true,
-            sourceImage: image
+            sourceImage: image,
+            inputExtent: extent,
+            outputExtent: extent
         )
         nodes[nodeId] = node
         return nodeId
@@ -187,16 +200,67 @@ internal struct FilterGraphBuilder {
             }
         }
 
+        // Get the input extent from the primary input node
+        let inputExtent = nodes[primaryInputNodeId]?.outputExtent ?? .zero
+
+        // Calculate output extent based on filter type
+        let outputExtent = calculateOutputExtent(
+            filterName: name,
+            parameters: nonImageParams,
+            inputExtent: inputExtent
+        )
+
         let node = FilterGraphNode(
             id: nodeId,
             filterName: name,
             parameters: nonImageParams,
             inputs: inputs,
             isSource: false,
-            sourceImage: nil
+            sourceImage: nil,
+            inputExtent: inputExtent,
+            outputExtent: outputExtent
         )
         nodes[nodeId] = node
         return nodeId
+    }
+
+    /// Calculates the output extent for a filter based on its type and parameters.
+    private func calculateOutputExtent(
+        filterName: String,
+        parameters: [String: Any],
+        inputExtent: CGRect
+    ) -> CGRect {
+        switch filterName {
+        case "CICrop":
+            // Crop output extent is the intersection of input extent and crop rect
+            if let rect = parameters["inputRectangle"] as? CIVector, rect.count >= 4 {
+                let cropRect = CGRect(
+                    x: rect.value(at: 0),
+                    y: rect.value(at: 1),
+                    width: rect.value(at: 2),
+                    height: rect.value(at: 3)
+                )
+                return inputExtent.intersection(cropRect)
+            }
+            return inputExtent
+
+        case "CIAffineTransform":
+            // Transform output extent is the input extent transformed by the matrix
+            if let transform = parameters[kCIInputTransformKey] as? CGAffineTransform {
+                return inputExtent.applying(transform)
+            }
+            return inputExtent
+
+        case "CIConstantColorGenerator", "CICheckerboardGenerator",
+             "CIStripesGenerator", "CIRandomGenerator",
+             "CILinearGradient", "CIRadialGradient":
+            // Generator filters produce infinite extent
+            return CGRect.infinite
+
+        default:
+            // Most filters preserve the input extent
+            return inputExtent
+        }
     }
 
     /// Performs topological sort starting from output node.

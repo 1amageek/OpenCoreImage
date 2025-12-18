@@ -62,6 +62,10 @@ internal struct WGSLShaderRegistry {
 
         // Generator filters
         "CIConstantColorGenerator": constantColorGeneratorWGSL,
+
+        // Geometry adjustment filters
+        "CICrop": cropWGSL,
+        "CIAffineTransform": affineTransformWGSL,
     ]
 
     // MARK: - Utility Shaders
@@ -694,6 +698,96 @@ internal struct WGSLShaderRegistry {
         }
 
         textureStore(outputTexture, coords, params.color);
+    }
+    """
+
+    // MARK: - Geometry Adjustment Shaders
+
+    private static let cropWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        cropX: f32,
+        cropY: f32,
+        cropWidth: f32,
+        cropHeight: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let outCoords = vec2<i32>(gid.xy);
+
+        if (outCoords.x >= i32(params.width) || outCoords.y >= i32(params.height)) {
+            return;
+        }
+
+        // Read from the crop region in input texture
+        let inCoords = vec2<i32>(
+            outCoords.x + i32(params.cropX),
+            outCoords.y + i32(params.cropY)
+        );
+
+        // Boundary check
+        let dims = textureDimensions(inputTexture);
+        if (inCoords.x < 0 || inCoords.x >= i32(dims.x) ||
+            inCoords.y < 0 || inCoords.y >= i32(dims.y)) {
+            textureStore(outputTexture, outCoords, vec4<f32>(0.0));
+            return;
+        }
+
+        let color = textureLoad(inputTexture, inCoords, 0);
+        textureStore(outputTexture, outCoords, color);
+    }
+    """
+
+    private static let affineTransformWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Inverse matrix elements (output -> input mapping)
+        invA: f32,
+        invB: f32,
+        invC: f32,
+        invD: f32,
+        invTx: f32,
+        invTy: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        if (gid.x >= params.width || gid.y >= params.height) {
+            return;
+        }
+
+        let outCoords = vec2<f32>(f32(gid.x), f32(gid.y));
+
+        // Apply inverse transform to get input coordinates
+        let inX = params.invA * outCoords.x + params.invC * outCoords.y + params.invTx;
+        let inY = params.invB * outCoords.x + params.invD * outCoords.y + params.invTy;
+
+        // Nearest neighbor sampling
+        let inCoords = vec2<i32>(i32(inX), i32(inY));
+
+        // Boundary check
+        let dims = textureDimensions(inputTexture);
+        if (inCoords.x < 0 || inCoords.x >= i32(dims.x) ||
+            inCoords.y < 0 || inCoords.y >= i32(dims.y)) {
+            textureStore(outputTexture, vec2<i32>(gid.xy), vec4<f32>(0.0));
+            return;
+        }
+
+        let color = textureLoad(inputTexture, inCoords, 0);
+        textureStore(outputTexture, vec2<i32>(gid.xy), color);
     }
     """
 }

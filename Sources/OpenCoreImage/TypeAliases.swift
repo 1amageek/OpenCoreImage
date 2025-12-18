@@ -48,16 +48,16 @@ public enum CGImagePropertyOrientation: UInt32, Sendable {
 
 /// Creates a device RGB color space.
 public func CGColorSpaceCreateDeviceRGB() -> CGColorSpace {
-    OpenCoreGraphics.CGColorSpaceCreateDeviceRGB()
+    .deviceRGB
 }
 
 /// Creates a device gray color space.
 public func CGColorSpaceCreateDeviceGray() -> CGColorSpace {
-    OpenCoreGraphics.CGColorSpaceCreateDeviceGray()
+    .deviceGray
 }
 
 /// Creates a device CMYK color space.
 public func CGColorSpaceCreateDeviceCMYK() -> CGColorSpace {
-    OpenCoreGraphics.CGColorSpaceCreateDeviceCMYK()
+    .deviceCMYK
 }
 #endif

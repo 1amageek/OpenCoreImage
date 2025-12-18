@@ -141,12 +141,12 @@ public final class CIVector: @unchecked Sendable {
     /// Returns the values in the vector as a `CGAffineTransform` structure.
     public var cgAffineTransformValue: CGAffineTransform {
         CGAffineTransform(
-            a: value(at: 0).native,
-            b: value(at: 1).native,
-            c: value(at: 2).native,
-            d: value(at: 3).native,
-            tx: value(at: 4).native,
-            ty: value(at: 5).native
+            a: value(at: 0),
+            b: value(at: 1),
+            c: value(at: 2),
+            d: value(at: 3),
+            tx: value(at: 4),
+            ty: value(at: 5)
         )
     }
 

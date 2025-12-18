@@ -19,12 +19,14 @@ internal struct UniformBufferEncoder {
     ///   - parameters: The filter parameters dictionary.
     ///   - imageWidth: The width of the image being processed.
     ///   - imageHeight: The height of the image being processed.
+    ///   - inputExtent: The extent of the input image (for coordinate transformations).
     /// - Returns: Binary data suitable for a GPU uniform buffer.
     static func encode(
         filterName: String,
         parameters: [String: Any],
         imageWidth: Int,
-        imageHeight: Int
+        imageHeight: Int,
+        inputExtent: CGRect = .zero
     ) -> Data {
         var data = Data()
 
@@ -72,6 +74,12 @@ internal struct UniformBufferEncoder {
 
         case "CIConstantColorGenerator":
             encodeConstantColorGenerator(parameters: parameters, into: &data)
+
+        case "CICrop":
+            encodeCrop(parameters: parameters, inputExtent: inputExtent, into: &data)
+
+        case "CIAffineTransform":
+            encodeAffineTransform(parameters: parameters, inputExtent: inputExtent, into: &data)
 
         default:
             // Unknown filter, no additional parameters
@@ -168,6 +176,98 @@ internal struct UniformBufferEncoder {
 
         let color = colorValue(parameters[kCIInputColorKey]) ?? [1.0, 1.0, 1.0, 1.0]
         appendVec4(color, to: &data)
+    }
+
+    private static func encodeCrop(parameters: [String: Any], inputExtent: CGRect, into data: inout Data) {
+        // Default crop rectangle (relative to input texture, which starts at 0,0)
+        var cropX: Float = 0.0
+        var cropY: Float = 0.0
+        var cropWidth: Float = 0.0
+        var cropHeight: Float = 0.0
+
+        if let rect = parameters["inputRectangle"] as? CIVector, rect.count >= 4 {
+            // The crop rect is in absolute coordinates (world space)
+            // We need to transform to relative coordinates (texture space)
+            //
+            // Example: If input extent is (100, 100, 200, 200) and crop rect is (150, 150, 50, 50):
+            // - Input texture maps extent origin (100, 100) to texture (0, 0)
+            // - Crop rect origin (150, 150) should map to texture (50, 50)
+            // - So relativeX = cropX - inputExtent.origin.x = 150 - 100 = 50
+            //
+            let absoluteCropX = rect.value(at: 0)
+            let absoluteCropY = rect.value(at: 1)
+            cropWidth = Float(rect.value(at: 2))
+            cropHeight = Float(rect.value(at: 3))
+
+            // Transform absolute coordinates to relative (texture) coordinates
+            cropX = Float(absoluteCropX - inputExtent.origin.x)
+            cropY = Float(absoluteCropY - inputExtent.origin.y)
+        }
+
+        appendFloat(cropX, to: &data)
+        appendFloat(cropY, to: &data)
+        appendFloat(cropWidth, to: &data)
+        appendFloat(cropHeight, to: &data)
+        // Padding to 16-byte boundary (2 x f32)
+        appendFloat(0.0, to: &data)
+        appendFloat(0.0, to: &data)
+    }
+
+    private static func encodeAffineTransform(parameters: [String: Any], inputExtent: CGRect, into data: inout Data) {
+        // Get the transform and compute its inverse, adjusted for texture coordinates
+        var invA: Float = 1.0
+        var invB: Float = 0.0
+        var invC: Float = 0.0
+        var invD: Float = 1.0
+        var invTx: Float = 0.0
+        var invTy: Float = 0.0
+
+        if let transform = parameters[kCIInputTransformKey] as? CGAffineTransform {
+            // Calculate inverse transform for output-to-input mapping
+            let inv = transform.inverted()
+            invA = Float(inv.a)
+            invB = Float(inv.b)
+            invC = Float(inv.c)
+            invD = Float(inv.d)
+
+            // The transform is defined in world coordinates, but we're working in texture coordinates.
+            // Output texture coord (0,0) represents world position outputExtent.origin
+            // We need to map from output texture coords to input texture coords.
+            //
+            // Mapping:
+            // 1. outTex -> world: worldOut = outTex + outputExtent.origin
+            // 2. world -> world: worldIn = inv(T) * worldOut
+            // 3. world -> inTex: inTex = worldIn - inputExtent.origin
+            //
+            // Combined: inTex = inv(T) * (outTex + O_out) - O_in
+            //                 = inv(T) * outTex + inv(T) * O_out - O_in
+            //
+            // So the adjusted translation is:
+            // invTx' = invA * O_out.x + invC * O_out.y + invTx - O_in.x
+            // invTy' = invB * O_out.x + invD * O_out.y + invTy - O_in.y
+
+            // Calculate output extent by applying transform to input extent
+            let outputExtent = inputExtent.applying(transform)
+
+            let outOriginX = Float(outputExtent.origin.x)
+            let outOriginY = Float(outputExtent.origin.y)
+            let inOriginX = Float(inputExtent.origin.x)
+            let inOriginY = Float(inputExtent.origin.y)
+
+            // Adjust translation for texture coordinate space
+            invTx = invA * outOriginX + invC * outOriginY + Float(inv.tx) - inOriginX
+            invTy = invB * outOriginX + invD * outOriginY + Float(inv.ty) - inOriginY
+        }
+
+        appendFloat(invA, to: &data)
+        appendFloat(invB, to: &data)
+        appendFloat(invC, to: &data)
+        appendFloat(invD, to: &data)
+        appendFloat(invTx, to: &data)
+        appendFloat(invTy, to: &data)
+        // Padding to 16-byte boundary (2 x f32)
+        appendFloat(0.0, to: &data)
+        appendFloat(0.0, to: &data)
     }
 
     // MARK: - Helper Methods
