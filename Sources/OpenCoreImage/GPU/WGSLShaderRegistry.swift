@@ -39,10 +39,10 @@ internal struct WGSLShaderRegistry {
         "CICopyTexture": copyTextureWGSL,
 
         // Blur filters (separable 2-pass for O(n) instead of O(n²))
-        "CIGaussianBlur": gaussianBlurWGSL,  // Legacy single-pass for small radii
+        "CIGaussianBlur": gaussianBlurWGSL,
         "CIGaussianBlurHorizontal": gaussianBlurHorizontalWGSL,
         "CIGaussianBlurVertical": gaussianBlurVerticalWGSL,
-        "CIBoxBlur": boxBlurWGSL,  // Legacy single-pass
+        "CIBoxBlur": boxBlurWGSL,
         "CIBoxBlurHorizontal": boxBlurHorizontalWGSL,
         "CIBoxBlurVertical": boxBlurVerticalWGSL,
 
@@ -57,8 +57,16 @@ internal struct WGSLShaderRegistry {
         "CISepiaTone": sepiaToneWGSL,
         "CIColorInvert": colorInvertWGSL,
 
-        // Composite operations (DAG support enabled)
+        // Composite operations
         "CISourceOverCompositing": sourceOverCompositingWGSL,
+        "CIMultiplyCompositing": multiplyCompositingWGSL,
+        "CIScreenCompositing": screenCompositingWGSL,
+        "CIOverlayCompositing": overlayCompositingWGSL,
+        "CIDarkenCompositing": darkenCompositingWGSL,
+        "CILightenCompositing": lightenCompositingWGSL,
+        "CIDifferenceCompositing": differenceCompositingWGSL,
+        "CIAdditionCompositing": additionCompositingWGSL,
+        "CISubtractCompositing": subtractCompositingWGSL,
 
         // Generator filters
         "CIConstantColorGenerator": constantColorGeneratorWGSL,
@@ -670,6 +678,220 @@ internal struct WGSLShaderRegistry {
         );
 
         textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let multiplyCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        // Multiply blend: Cs * Cd
+        let rgb = fg.rgb * bg.rgb;
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let screenCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        // Screen blend: 1 - (1 - Cs) * (1 - Cd)
+        let rgb = 1.0 - (1.0 - fg.rgb) * (1.0 - bg.rgb);
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let overlayCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    fn overlay(a: f32, b: f32) -> f32 {
+        if (b < 0.5) {
+            return 2.0 * a * b;
+        } else {
+            return 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+        }
+    }
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = vec3<f32>(
+            overlay(fg.r, bg.r),
+            overlay(fg.g, bg.g),
+            overlay(fg.b, bg.b)
+        );
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let darkenCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = min(fg.rgb, bg.rgb);
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let lightenCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = max(fg.rgb, bg.rgb);
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let differenceCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = abs(fg.rgb - bg.rgb);
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let additionCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = clamp(fg.rgb + bg.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
+    }
+    """
+
+    private static let subtractCompositingWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var foregroundTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(foregroundTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+
+        let rgb = clamp(bg.rgb - fg.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
     }
     """
 
