@@ -88,6 +88,15 @@ public class CIFilter {
 
     /// Returns a `CIImage` object that encapsulates the operations configured in the filter.
     open var outputImage: CIImage? {
+        // Check if this is a generator filter (no input image required)
+        if Self.isGeneratorFilter(_name) {
+            // Generator filters create content from scratch
+            // Create a placeholder CIImage and apply the generator filter
+            let placeholder = CIImage(extent: .infinite, colorSpace: nil, cgImage: nil, color: nil, url: nil, data: nil, pixelData: nil, properties: [:], transform: .identity, filters: [])
+            return placeholder.applyingFilter(_name, parameters: _inputValues)
+        }
+
+        // Standard and compositing filters require an input image
         guard let inputImage = _inputValues[kCIInputImageKey] as? CIImage else {
             return nil
         }
@@ -96,6 +105,26 @@ public class CIFilter {
         var parameters = _inputValues
         parameters.removeValue(forKey: kCIInputImageKey)
         return inputImage.applyingFilter(_name, parameters: parameters)
+    }
+
+    /// Returns true if the filter name is a generator filter.
+    private static func isGeneratorFilter(_ name: String) -> Bool {
+        switch name {
+        case "CIConstantColorGenerator", "CICheckerboardGenerator",
+             "CIStripesGenerator", "CIRandomGenerator",
+             "CILinearGradient", "CIRadialGradient",
+             "CIRoundedRectangleGenerator", "CIStarShineGenerator",
+             "CISunbeamsGenerator", "CILenticularHaloGenerator",
+             "CIMeshGenerator", "CITextImageGenerator",
+             "CIAttributedTextImageGenerator", "CIQRCodeGenerator",
+             "CIAztecCodeGenerator", "CICode128BarcodeGenerator",
+             "CIPDF417BarcodeGenerator", "CIBarcodeGenerator",
+             "CIBlurredRectangleGenerator", "CIRoundedRectangleStrokeGenerator",
+             "CIBlurredRoundedRectangleGenerator", "CIRoundedQRCodeGenerator":
+            return true
+        default:
+            return false
+        }
     }
 
     // MARK: - Key-Value Coding

@@ -369,19 +369,66 @@ internal actor FilterGraphCompiler {
                     ]
                 )
             )
+
+        case .transition:
+            // Transition layout: input(0), target(1), output(2), uniform(3)
+            let inputIndex = inputTextureIndices[kCIInputImageKey] ?? 0
+            let targetIndex = inputTextureIndices[kCIInputTargetImageKey] ?? 0
+            return device.createBindGroup(
+                descriptor: GPUBindGroupDescriptor(
+                    layout: bindGroupLayout,
+                    entries: [
+                        GPUBindGroupEntry(
+                            binding: 0,
+                            resource: .textureView(textureViews[inputIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 1,
+                            resource: .textureView(textureViews[targetIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 2,
+                            resource: .textureView(outputTextureView)
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 3,
+                            resource: .bufferBinding(GPUBufferBinding(buffer: uniformBuffer))
+                        ),
+                    ]
+                )
+            )
         }
     }
 
     private func getFilterCategory(_ filterName: String) -> FilterCategory {
         switch filterName {
+        // Compositing filters (Porter-Duff and blend modes)
         case "CISourceOverCompositing", "CISourceAtopCompositing",
              "CISourceInCompositing", "CISourceOutCompositing",
              "CIMultiplyCompositing", "CIScreenCompositing",
-             "CIOverlayCompositing", "CIAdditionCompositing":
+             "CIOverlayCompositing", "CIAdditionCompositing",
+             "CISubtractCompositing", "CIDarkenCompositing",
+             "CILightenCompositing", "CIDifferenceCompositing",
+             "CIMaximumCompositing", "CIMinimumCompositing",
+             // Blend modes
+             "CIColorBurnBlendMode", "CIColorDodgeBlendMode",
+             "CISoftLightBlendMode", "CIHardLightBlendMode",
+             "CIExclusionBlendMode", "CIHueBlendMode",
+             "CISaturationBlendMode", "CIColorBlendMode",
+             "CILuminosityBlendMode", "CIPinLightBlendMode",
+             "CILinearBurnBlendMode", "CILinearDodgeBlendMode",
+             "CIDivideBlendMode":
             return .compositing
 
+        // Transition filters
+        case "CIDissolveTransition":
+            return .transition
+
+        // Generator filters
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
-             "CIStripesGenerator", "CILinearGradient", "CIRadialGradient":
+             "CIStripesGenerator", "CILinearGradient", "CIRadialGradient",
+             "CIRandomGenerator", "CIRoundedRectangleGenerator",
+             "CIStarShineGenerator", "CISunbeamsGenerator":
             return .generator
 
         default:

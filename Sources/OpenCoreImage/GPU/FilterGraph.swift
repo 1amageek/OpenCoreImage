@@ -253,7 +253,9 @@ internal struct FilterGraphBuilder {
 
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
              "CIStripesGenerator", "CIRandomGenerator",
-             "CILinearGradient", "CIRadialGradient":
+             "CILinearGradient", "CIRadialGradient",
+             "CIRoundedRectangleGenerator", "CIStarShineGenerator",
+             "CISunbeamsGenerator":
             // Generator filters produce infinite extent
             return CGRect.infinite
 
@@ -289,40 +291,6 @@ internal struct FilterGraphBuilder {
     }
 }
 
-// MARK: - Filter Categories
-
-extension FilterGraphNode {
-    /// Returns the filter category for bind group creation.
-    var filterCategory: FilterCategory {
-        switch filterName {
-        case "Source":
-            return .source
-
-        case "CISourceOverCompositing", "CISourceAtopCompositing",
-             "CISourceInCompositing", "CISourceOutCompositing",
-             "CIDestinationOverCompositing", "CIDestinationAtopCompositing",
-             "CIDestinationInCompositing", "CIDestinationOutCompositing",
-             "CIMultiplyCompositing", "CIScreenCompositing",
-             "CIOverlayCompositing", "CIDarkenCompositing",
-             "CILightenCompositing", "CIColorDodgeCompositing",
-             "CIColorBurnCompositing", "CISoftLightCompositing",
-             "CIHardLightCompositing", "CIDifferenceCompositing",
-             "CIExclusionCompositing", "CIAdditionCompositing",
-             "CISubtractCompositing", "CIDivideCompositing",
-             "CIMaximumCompositing", "CIMinimumCompositing":
-            return .compositing
-
-        case "CIConstantColorGenerator", "CICheckerboardGenerator",
-             "CIStripesGenerator", "CIRandomGenerator",
-             "CILinearGradient", "CIRadialGradient":
-            return .generator
-
-        default:
-            return .standard
-        }
-    }
-}
-
 /// Categories of filters based on their input/output requirements.
 internal enum FilterCategory {
     /// Source node - has image data, no processing.
@@ -336,5 +304,8 @@ internal enum FilterCategory {
 
     /// Generator filter - 0 inputs, 1 output.
     case generator
+
+    /// Transition filter - 2 inputs (source + target), 1 output.
+    case transition
 }
 #endif
