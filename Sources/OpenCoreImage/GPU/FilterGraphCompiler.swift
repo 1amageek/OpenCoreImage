@@ -73,6 +73,40 @@ internal actor FilterGraphCompiler {
     /// Threshold radius above which to use separable blur (2-pass)
     private let separableBlurThreshold: Float = 3.0
 
+    // MARK: - Infinite Extent Handling
+
+    /// Resolves an extent to finite dimensions, using render target size for infinite extents.
+    /// - Parameters:
+    ///   - extent: The extent to resolve.
+    ///   - renderWidth: The width of the render target.
+    ///   - renderHeight: The height of the render target.
+    /// - Returns: A finite CGRect.
+    private func resolveFiniteExtent(_ extent: CGRect, renderWidth: UInt32, renderHeight: UInt32) -> CGRect {
+        if extent.isInfinite || extent.width.isInfinite || extent.height.isInfinite {
+            // Use render target dimensions for infinite extent
+            return CGRect(x: 0, y: 0, width: CGFloat(renderWidth), height: CGFloat(renderHeight))
+        }
+        return extent
+    }
+
+    /// Checks if a filter produces infinite extent output.
+    /// - Parameter filterName: The name of the filter.
+    /// - Returns: True if the filter produces infinite extent.
+    private func producesInfiniteExtent(_ filterName: String) -> Bool {
+        switch filterName {
+        case "CIConstantColorGenerator", "CICheckerboardGenerator",
+             "CIStripesGenerator", "CILinearGradient", "CIRadialGradient",
+             "CIRandomGenerator", "CIRoundedRectangleGenerator",
+             "CIStarShineGenerator", "CISunbeamsGenerator",
+             "CIGaussianGradient", "CISmoothLinearGradient",
+             "CIHueSaturationValueGradient", "CILenticularHaloGenerator",
+             "CIAffineClamp":
+            return true
+        default:
+            return false
+        }
+    }
+
     // MARK: - Public Interface
 
     /// Compiles a CIImage's filter graph into a GPU-executable graph.
@@ -241,7 +275,10 @@ internal actor FilterGraphCompiler {
             // For the first pass, use the node's input extent for coordinate transformations
             // For subsequent passes (e.g., separable blur), the intermediate textures have
             // the same extent as the output, so we can use the node's output extent
-            let extentForEncoding = (index == 0) ? node.inputExtent : node.outputExtent
+            //
+            // Resolve infinite extents to render target dimensions
+            let rawExtent = (index == 0) ? node.inputExtent : node.outputExtent
+            let extentForEncoding = resolveFiniteExtent(rawExtent, renderWidth: width, renderHeight: height)
             let uniformData = UniformBufferEncoder.encode(
                 filterName: filter.name,
                 parameters: filter.parameters,
@@ -397,6 +434,91 @@ internal actor FilterGraphCompiler {
                     ]
                 )
             )
+
+        case .blendWithMask:
+            // Blend with mask layout: input(0), background(1), mask(2), output(3), uniform(4)
+            let inputIndex = inputTextureIndices[kCIInputImageKey] ?? 0
+            let backgroundIndex = inputTextureIndices[kCIInputBackgroundImageKey] ?? 0
+            let maskIndex = inputTextureIndices["inputMaskImage"] ?? 0
+            return device.createBindGroup(
+                descriptor: GPUBindGroupDescriptor(
+                    layout: bindGroupLayout,
+                    entries: [
+                        GPUBindGroupEntry(
+                            binding: 0,
+                            resource: .textureView(textureViews[inputIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 1,
+                            resource: .textureView(textureViews[backgroundIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 2,
+                            resource: .textureView(textureViews[maskIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 3,
+                            resource: .textureView(outputTextureView)
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 4,
+                            resource: .bufferBinding(GPUBufferBinding(buffer: uniformBuffer))
+                        ),
+                    ]
+                )
+            )
+
+        case .reduction:
+            // Reduction layout: same as standard (input(0), output(1), uniform(2))
+            // Output is typically a 1x1 or 1xN texture
+            let inputIndex = inputTextureIndices[kCIInputImageKey] ?? 0
+            return device.createBindGroup(
+                descriptor: GPUBindGroupDescriptor(
+                    layout: bindGroupLayout,
+                    entries: [
+                        GPUBindGroupEntry(
+                            binding: 0,
+                            resource: .textureView(textureViews[inputIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 1,
+                            resource: .textureView(outputTextureView)
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 2,
+                            resource: .bufferBinding(GPUBufferBinding(buffer: uniformBuffer))
+                        ),
+                    ]
+                )
+            )
+
+        case .displacement:
+            // Displacement layout: input(0), displacementTexture(1), output(2), uniform(3)
+            let inputIndex = inputTextureIndices[kCIInputImageKey] ?? 0
+            let displacementIndex = inputTextureIndices["inputTexture"] ?? inputTextureIndices["inputDisplacementImage"] ?? 0
+            return device.createBindGroup(
+                descriptor: GPUBindGroupDescriptor(
+                    layout: bindGroupLayout,
+                    entries: [
+                        GPUBindGroupEntry(
+                            binding: 0,
+                            resource: .textureView(textureViews[inputIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 1,
+                            resource: .textureView(textureViews[displacementIndex])
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 2,
+                            resource: .textureView(outputTextureView)
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 3,
+                            resource: .bufferBinding(GPUBufferBinding(buffer: uniformBuffer))
+                        ),
+                    ]
+                )
+            )
         }
     }
 
@@ -417,7 +539,9 @@ internal actor FilterGraphCompiler {
              "CISaturationBlendMode", "CIColorBlendMode",
              "CILuminosityBlendMode", "CIPinLightBlendMode",
              "CILinearBurnBlendMode", "CILinearDodgeBlendMode",
-             "CIDivideBlendMode":
+             "CIDivideBlendMode",
+             // Mix filter (also uses 2 textures)
+             "CIMix":
             return .compositing
 
         // Transition filters
@@ -431,8 +555,27 @@ internal actor FilterGraphCompiler {
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
              "CIStripesGenerator", "CILinearGradient", "CIRadialGradient",
              "CIRandomGenerator", "CIRoundedRectangleGenerator",
-             "CIStarShineGenerator", "CISunbeamsGenerator":
+             "CIStarShineGenerator", "CISunbeamsGenerator",
+             "CIGaussianGradient", "CISmoothLinearGradient",
+             "CIHueSaturationValueGradient", "CILenticularHaloGenerator":
             return .generator
+
+        // Blend with mask filters
+        case "CIBlendWithMask", "CIBlendWithAlphaMask",
+             "CIBlendWithRedMask", "CIBlendWithBlueMask":
+            return .blendWithMask
+
+        // Reduction filters
+        case "CIAreaAverage", "CIAreaMaximum", "CIAreaMinimum",
+             "CIAreaMaximumAlpha", "CIAreaMinimumAlpha",
+             "CIAreaMinMax", "CIAreaMinMaxRed",
+             "CIRowAverage", "CIColumnAverage",
+             "CIAreaHistogram", "CIHistogramDisplayFilter":
+            return .reduction
+
+        // Displacement filters
+        case "CIGlassDistortion", "CIDisplacementDistortion":
+            return .displacement
 
         default:
             return .standard

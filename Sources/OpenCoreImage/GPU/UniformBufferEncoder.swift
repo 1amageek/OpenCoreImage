@@ -297,6 +297,109 @@ internal struct UniformBufferEncoder {
         case "CILanczosScaleTransform":
             encodeLanczosScaleTransform(parameters: parameters, into: &data)
 
+        // Reduction filters
+        case "CIAreaAverage", "CIAreaMaximum", "CIAreaMinimum",
+             "CIAreaMaximumAlpha", "CIAreaMinimumAlpha",
+             "CIAreaMinMax", "CIAreaMinMaxRed",
+             "CIRowAverage", "CIColumnAverage":
+            encodeAreaReduction(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIAreaHistogram":
+            encodeAreaHistogram(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIHistogramDisplayFilter":
+            encodeHistogramDisplay(parameters: parameters, into: &data)
+
+        // Convolution filters
+        case "CIConvolution3X3":
+            encodeConvolution3X3(parameters: parameters, into: &data)
+
+        case "CIConvolution5X5":
+            encodeConvolution5X5(parameters: parameters, into: &data)
+
+        case "CIConvolution7X7":
+            encodeConvolution7X7(parameters: parameters, into: &data)
+
+        case "CIConvolution9Horizontal", "CIConvolution9Vertical":
+            encodeConvolution9(parameters: parameters, into: &data)
+
+        // Additional distortion filters
+        case "CIBumpDistortionLinear":
+            encodeBumpDistortionLinear(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CICircularWrap":
+            encodeCircularWrap(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CITorusLensDistortion":
+            encodeTorusLensDistortion(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CILightTunnel":
+            encodeLightTunnel(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIDroste":
+            encodeDroste(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIStretchCrop":
+            encodeStretchCrop(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIGlassDistortion", "CIDisplacementDistortion":
+            encodeDisplacementDistortion(parameters: parameters, into: &data)
+
+        // Additional gradient filters
+        case "CIGaussianGradient":
+            encodeGaussianGradient(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CISmoothLinearGradient":
+            encodeSmoothLinearGradient(parameters: parameters, into: &data)
+
+        case "CIHueSaturationValueGradient":
+            encodeHueSaturationValueGradient(parameters: parameters, into: &data)
+
+        case "CILenticularHaloGenerator":
+            encodeLenticularHaloGenerator(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        // Additional halftone filters
+        case "CICMYKHalftone":
+            encodeCMYKHalftone(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        // Additional stylizing filters
+        case "CIHighlightShadowAdjust":
+            encodeHighlightShadowAdjust(parameters: parameters, into: &data)
+
+        case "CISpotLight":
+            encodeSpotLight(parameters: parameters, into: &data)
+
+        case "CISpotColor":
+            encodeSpotColor(parameters: parameters, into: &data)
+
+        case "CILineOverlay":
+            encodeLineOverlay(parameters: parameters, into: &data)
+
+        case "CIComicEffect":
+            // No additional parameters needed
+            break
+
+        // Blend with mask filters
+        case "CIMix":
+            encodeMix(parameters: parameters, into: &data)
+
+        case "CIBlendWithMask", "CIBlendWithAlphaMask", "CIBlendWithRedMask", "CIBlendWithBlueMask":
+            // No additional parameters needed (uses 3 textures: input, background, mask)
+            break
+
+        // Additional tile effect filters
+        case "CIClamp":
+            encodeClamp(parameters: parameters, into: &data)
+
+        case "CIEightfoldReflectedTile":
+            encodeEightfoldReflectedTile(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CITwelvefoldReflectedTile":
+            encodeTwelvefoldReflectedTile(parameters: parameters, imageWidth: imageWidth, imageHeight: imageHeight, into: &data)
+
+        case "CIPerspectiveTile":
+            encodePerspectiveTile(parameters: parameters, into: &data)
+
         default:
             // Unknown filter, no additional parameters
             break
@@ -886,39 +989,101 @@ internal struct UniformBufferEncoder {
 
     private static func encodePerspectiveTransform(parameters: [String: Any], into data: inout Data) {
         // Params: m00-m22 (9 values), _padding, _padding2(2)
-        // Default to identity perspective matrix
-        var m00: Float = 1.0, m01: Float = 0.0, m02: Float = 0.0
-        var m10: Float = 0.0, m11: Float = 1.0, m12: Float = 0.0
-        var m20: Float = 0.0, m21: Float = 0.0, m22: Float = 1.0
+        // Compute perspective homography matrix from 4 point correspondences
+        //
+        // Maps source quad (inputTopLeft, inputTopRight, inputBottomRight, inputBottomLeft)
+        // to a unit square for rendering. The shader uses the inverse to map output coords
+        // back to source coords.
 
-        // CoreImage uses CIVector for perspective points (topLeft, topRight, bottomRight, bottomLeft)
-        // We compute the perspective matrix from these 4 points
-        if let tl = vectorValue(parameters["inputTopLeft"]),
-           let tr = vectorValue(parameters["inputTopRight"]),
-           let br = vectorValue(parameters["inputBottomRight"]),
-           let bl = vectorValue(parameters["inputBottomLeft"]),
-           tl.count >= 2, tr.count >= 2, br.count >= 2, bl.count >= 2 {
+        // Get source quad corners (default to unit square if not specified)
+        let tl = point2Value(parameters["inputTopLeft"]) ?? (0.0, 0.0)
+        let tr = point2Value(parameters["inputTopRight"]) ?? (1.0, 0.0)
+        let br = point2Value(parameters["inputBottomRight"]) ?? (1.0, 1.0)
+        let bl = point2Value(parameters["inputBottomLeft"]) ?? (0.0, 1.0)
 
-            // Simple perspective approximation using bilinear interpolation
-            // For a more accurate implementation, would need to solve the
-            // perspective homography matrix from 4 point correspondences
-            m00 = 1.0
-            m11 = 1.0
-            m22 = 1.0
-        }
+        // Compute perspective transform matrix using the standard algorithm
+        // This maps the unit square corners to the source quad
+        let matrix = computePerspectiveMatrix(
+            x0: tl.0, y0: tl.1,  // (0,0) -> topLeft
+            x1: tr.0, y1: tr.1,  // (1,0) -> topRight
+            x2: br.0, y2: br.1,  // (1,1) -> bottomRight
+            x3: bl.0, y3: bl.1   // (0,1) -> bottomLeft
+        )
 
-        appendFloat(m00, to: &data)
-        appendFloat(m01, to: &data)
-        appendFloat(m02, to: &data)
-        appendFloat(m10, to: &data)
-        appendFloat(m11, to: &data)
-        appendFloat(m12, to: &data)
-        appendFloat(m20, to: &data)
-        appendFloat(m21, to: &data)
-        appendFloat(m22, to: &data)
+        // Output the matrix elements
+        appendFloat(matrix.m00, to: &data)
+        appendFloat(matrix.m01, to: &data)
+        appendFloat(matrix.m02, to: &data)
+        appendFloat(matrix.m10, to: &data)
+        appendFloat(matrix.m11, to: &data)
+        appendFloat(matrix.m12, to: &data)
+        appendFloat(matrix.m20, to: &data)
+        appendFloat(matrix.m21, to: &data)
+        appendFloat(matrix.m22, to: &data)
         appendFloat(0.0, to: &data)  // _padding
         appendFloat(0.0, to: &data)  // _padding2
         appendFloat(0.0, to: &data)  // _padding2
+    }
+
+    /// Computes a 3x3 perspective transform matrix that maps unit square to arbitrary quadrilateral.
+    /// Maps: (0,0)->p0, (1,0)->p1, (1,1)->p2, (0,1)->p3
+    private static func computePerspectiveMatrix(
+        x0: Float, y0: Float,
+        x1: Float, y1: Float,
+        x2: Float, y2: Float,
+        x3: Float, y3: Float
+    ) -> (m00: Float, m01: Float, m02: Float,
+          m10: Float, m11: Float, m12: Float,
+          m20: Float, m21: Float, m22: Float) {
+        // Using the standard perspective transform derivation:
+        // Given 4 point correspondences, solve for the homography matrix H
+        //
+        // The transform maps (u,v) -> (x,y) where:
+        //   x = (m00*u + m01*v + m02) / (m20*u + m21*v + m22)
+        //   y = (m10*u + m11*v + m12) / (m20*u + m21*v + m22)
+
+        // Compute auxiliary values
+        let dx1 = x1 - x2
+        let dx2 = x3 - x2
+        let dx3 = x0 - x1 + x2 - x3
+
+        let dy1 = y1 - y2
+        let dy2 = y3 - y2
+        let dy3 = y0 - y1 + y2 - y3
+
+        // Check for affine case (no perspective distortion needed)
+        let epsilon: Float = 1e-10
+        if abs(dx3) < epsilon && abs(dy3) < epsilon {
+            // Affine transform
+            let m00 = x1 - x0
+            let m01 = x3 - x0
+            let m02 = x0
+            let m10 = y1 - y0
+            let m11 = y3 - y0
+            let m12 = y0
+            return (m00, m01, m02, m10, m11, m12, 0.0, 0.0, 1.0)
+        }
+
+        // Perspective transform - solve for h20, h21
+        let denom = dx1 * dy2 - dx2 * dy1
+        guard abs(denom) > epsilon else {
+            // Degenerate case - return identity
+            return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        }
+
+        let m20 = (dx3 * dy2 - dx2 * dy3) / denom
+        let m21 = (dx1 * dy3 - dx3 * dy1) / denom
+        let m22: Float = 1.0
+
+        let m00 = x1 - x0 + m20 * x1
+        let m01 = x3 - x0 + m21 * x3
+        let m02 = x0
+
+        let m10 = y1 - y0 + m20 * y1
+        let m11 = y3 - y0 + m21 * y3
+        let m12 = y0
+
+        return (m00, m01, m02, m10, m11, m12, m20, m21, m22)
     }
 
     private static func encodePerspectiveCorrection(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
@@ -1317,6 +1482,457 @@ internal struct UniformBufferEncoder {
         appendFloat(rippleWidth, to: &data)
         appendFloat(scale, to: &data)
         appendFloat(0.0, to: &data)  // _padding
+    }
+
+    // MARK: - Reduction Filter Encoders
+
+    private static func encodeAreaReduction(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: regionX, regionY, regionW, regionH
+        // Extract the extent parameter (CIVector with 4 components: x, y, width, height)
+        var regionX: Float = 0.0
+        var regionY: Float = 0.0
+        var regionW = Float(imageWidth)
+        var regionH = Float(imageHeight)
+
+        if let extent = vectorValue(parameters["inputExtent"]), extent.count >= 4 {
+            regionX = extent[0]
+            regionY = extent[1]
+            regionW = extent[2]
+            regionH = extent[3]
+        }
+
+        appendFloat(regionX, to: &data)
+        appendFloat(regionY, to: &data)
+        appendFloat(regionW, to: &data)
+        appendFloat(regionH, to: &data)
+    }
+
+    private static func encodeAreaHistogram(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        // Params: regionX, regionY, regionW, regionH, binCount, scale
+        var regionX: Float = 0.0
+        var regionY: Float = 0.0
+        var regionW = Float(imageWidth)
+        var regionH = Float(imageHeight)
+
+        if let extent = vectorValue(parameters["inputExtent"]), extent.count >= 4 {
+            regionX = extent[0]
+            regionY = extent[1]
+            regionW = extent[2]
+            regionH = extent[3]
+        }
+
+        let binCount = floatValue(parameters["inputCount"]) ?? 256.0
+        let scale = floatValue(parameters["inputScale"]) ?? 1.0
+
+        appendFloat(regionX, to: &data)
+        appendFloat(regionY, to: &data)
+        appendFloat(regionW, to: &data)
+        appendFloat(regionH, to: &data)
+        appendFloat(binCount, to: &data)
+        appendFloat(scale, to: &data)
+    }
+
+    private static func encodeHistogramDisplay(parameters: [String: Any], into data: inout Data) {
+        // Params: histogramWidth, lowLimit, highLimit, _padding, _padding2
+        let histogramWidth = floatValue(parameters["inputHeight"]) ?? 256.0  // inputHeight is histogram bin count
+        let lowLimit = floatValue(parameters["inputLowLimit"]) ?? 0.0
+        let highLimit = floatValue(parameters["inputHighLimit"]) ?? 1.0
+
+        appendFloat(histogramWidth, to: &data)
+        appendFloat(lowLimit, to: &data)
+        appendFloat(highLimit, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding2
+        appendFloat(0.0, to: &data)  // _padding2
+    }
+
+    // MARK: - Convolution Filter Encoders
+
+    private static func encodeConvolution3X3(parameters: [String: Any], into data: inout Data) {
+        // Params: 9 weights + bias + _padding(2)
+        let weights = vectorValue(parameters["inputWeights"]) ?? [
+            0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0
+        ]
+        let bias = floatValue(parameters["inputBias"]) ?? 0.0
+
+        for i in 0..<9 {
+            let value = i < weights.count ? weights[i] : 0.0
+            appendFloat(value, to: &data)
+        }
+        appendFloat(bias, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeConvolution5X5(parameters: [String: Any], into data: inout Data) {
+        // Params: 25 weights + bias + _padding(2)
+        var weights: [Float] = Array(repeating: 0.0, count: 25)
+        weights[12] = 1.0  // Center element for identity kernel
+
+        if let inputWeights = vectorValue(parameters["inputWeights"]) {
+            for i in 0..<min(25, inputWeights.count) {
+                weights[i] = inputWeights[i]
+            }
+        }
+        let bias = floatValue(parameters["inputBias"]) ?? 0.0
+
+        for weight in weights {
+            appendFloat(weight, to: &data)
+        }
+        appendFloat(bias, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeConvolution7X7(parameters: [String: Any], into data: inout Data) {
+        // Params: 49 weights + bias + _padding(2)
+        var weights: [Float] = Array(repeating: 0.0, count: 49)
+        weights[24] = 1.0  // Center element for identity kernel
+
+        if let inputWeights = vectorValue(parameters["inputWeights"]) {
+            for i in 0..<min(49, inputWeights.count) {
+                weights[i] = inputWeights[i]
+            }
+        }
+        let bias = floatValue(parameters["inputBias"]) ?? 0.0
+
+        for weight in weights {
+            appendFloat(weight, to: &data)
+        }
+        appendFloat(bias, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    private static func encodeConvolution9(parameters: [String: Any], into data: inout Data) {
+        // Params: 9 weights + bias + _padding(2)
+        var weights: [Float] = Array(repeating: 0.0, count: 9)
+        weights[4] = 1.0  // Center element for identity kernel
+
+        if let inputWeights = vectorValue(parameters["inputWeights"]) {
+            for i in 0..<min(9, inputWeights.count) {
+                weights[i] = inputWeights[i]
+            }
+        }
+        let bias = floatValue(parameters["inputBias"]) ?? 0.0
+
+        for weight in weights {
+            appendFloat(weight, to: &data)
+        }
+        appendFloat(bias, to: &data)
+        appendFloat(0.0, to: &data)  // _padding
+        appendFloat(0.0, to: &data)  // _padding
+    }
+
+    // MARK: - Additional Distortion Encoders
+
+    private static func encodeBumpDistortionLinear(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 300.0
+        let scale = floatValue(parameters["inputScale"]) ?? 0.5
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(scale, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeCircularWrap(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 150.0
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(angle, to: &data)
+    }
+
+    private static func encodeTorusLensDistortion(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 160.0
+        let width = floatValue(parameters["inputWidth"]) ?? 80.0
+        let refraction = floatValue(parameters["inputRefraction"]) ?? 1.7
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(width, to: &data)
+        appendFloat(refraction, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeLightTunnel(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 100.0
+        let rotation = floatValue(parameters["inputRotation"]) ?? 0.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(rotation, to: &data)
+    }
+
+    private static func encodeDroste(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let insetPoint0 = point2Value(parameters["inputInsetPoint0"]) ?? (200.0, 200.0)
+        let insetPoint1 = point2Value(parameters["inputInsetPoint1"]) ?? (Float(imageWidth) - 200.0, Float(imageHeight) - 200.0)
+        let strands = floatValue(parameters["inputStrands"]) ?? 1.0
+        let periodicity = floatValue(parameters["inputPeriodicity"]) ?? 1.0
+        let rotation = floatValue(parameters["inputRotation"]) ?? 0.0
+        let zoom = floatValue(parameters["inputZoom"]) ?? 1.0
+
+        appendFloat(insetPoint0.0, to: &data)
+        appendFloat(insetPoint0.1, to: &data)
+        appendFloat(insetPoint1.0, to: &data)
+        appendFloat(insetPoint1.1, to: &data)
+        appendFloat(strands, to: &data)
+        appendFloat(periodicity, to: &data)
+        appendFloat(rotation, to: &data)
+        appendFloat(zoom, to: &data)
+    }
+
+    private static func encodeStretchCrop(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let size = point2Value(parameters["inputSize"]) ?? (1280.0, 720.0)
+        let cropAmount = floatValue(parameters["inputCropAmount"]) ?? 0.25
+        let centerStretchAmount = floatValue(parameters["inputCenterStretchAmount"]) ?? 0.25
+
+        appendFloat(size.0, to: &data)
+        appendFloat(size.1, to: &data)
+        appendFloat(cropAmount, to: &data)
+        appendFloat(centerStretchAmount, to: &data)
+    }
+
+    private static func encodeDisplacementDistortion(parameters: [String: Any], into data: inout Data) {
+        // For displacement distortion filters that use a texture map
+        let scale = floatValue(parameters["inputScale"]) ?? 50.0
+
+        appendFloat(scale, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    // MARK: - Additional Gradient Encoders
+
+    private static func encodeGaussianGradient(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 300.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+
+        let color0 = colorValue(parameters[kCIInputColor0Key]) ?? [1.0, 1.0, 1.0, 1.0]
+        let color1 = colorValue(parameters[kCIInputColor1Key]) ?? [0.0, 0.0, 0.0, 0.0]
+        appendVec4(color0, to: &data)
+        appendVec4(color1, to: &data)
+    }
+
+    private static func encodeSmoothLinearGradient(parameters: [String: Any], into data: inout Data) {
+        let point0 = point2Value(parameters[kCIInputPoint0Key]) ?? (0.0, 0.0)
+        let point1 = point2Value(parameters[kCIInputPoint1Key]) ?? (200.0, 200.0)
+
+        appendFloat(point0.0, to: &data)
+        appendFloat(point0.1, to: &data)
+        appendFloat(point1.0, to: &data)
+        appendFloat(point1.1, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+        appendFloat(0.0, to: &data)  // Padding
+
+        let color0 = colorValue(parameters[kCIInputColor0Key]) ?? [1.0, 1.0, 1.0, 1.0]
+        let color1 = colorValue(parameters[kCIInputColor1Key]) ?? [0.0, 0.0, 0.0, 1.0]
+        appendVec4(color0, to: &data)
+        appendVec4(color1, to: &data)
+    }
+
+    private static func encodeHueSaturationValueGradient(parameters: [String: Any], into data: inout Data) {
+        let value = floatValue(parameters["inputValue"]) ?? 1.0
+        let softness = floatValue(parameters["inputSoftness"]) ?? 1.0
+        let dither = floatValue(parameters["inputDither"]) ?? 1.0
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 300.0
+
+        appendFloat(value, to: &data)
+        appendFloat(softness, to: &data)
+        appendFloat(dither, to: &data)
+        appendFloat(radius, to: &data)
+    }
+
+    private static func encodeLenticularHaloGenerator(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let haloRadius = floatValue(parameters["inputHaloRadius"]) ?? 70.0
+        let haloWidth = floatValue(parameters["inputHaloWidth"]) ?? 87.0
+        let haloOverlap = floatValue(parameters["inputHaloOverlap"]) ?? 0.77
+        let striationStrength = floatValue(parameters["inputStriationStrength"]) ?? 0.5
+        let striationContrast = floatValue(parameters["inputStriationContrast"]) ?? 1.0
+        let time = floatValue(parameters["inputTime"]) ?? 0.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(haloRadius, to: &data)
+        appendFloat(haloWidth, to: &data)
+        appendFloat(haloOverlap, to: &data)
+        appendFloat(striationStrength, to: &data)
+        appendFloat(striationContrast, to: &data)
+        appendFloat(time, to: &data)
+
+        let color = colorValue(parameters[kCIInputColorKey]) ?? [1.0, 0.9, 0.8, 1.0]
+        appendVec4(color, to: &data)
+    }
+
+    // MARK: - Additional Halftone Encoders
+
+    private static func encodeCMYKHalftone(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let width = floatValue(parameters["inputWidth"]) ?? 6.0
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let sharpness = floatValue(parameters["inputSharpness"]) ?? 0.7
+        let gcr = floatValue(parameters["inputGCR"]) ?? 1.0
+        let ucr = floatValue(parameters["inputUCR"]) ?? 0.5
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(width, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(sharpness, to: &data)
+        appendFloat(gcr, to: &data)
+        appendFloat(ucr, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    // MARK: - Additional Stylizing Encoders
+
+    private static func encodeHighlightShadowAdjust(parameters: [String: Any], into data: inout Data) {
+        let highlightAmount = floatValue(parameters["inputHighlightAmount"]) ?? 1.0
+        let shadowAmount = floatValue(parameters["inputShadowAmount"]) ?? 0.0
+        let radius = floatValue(parameters[kCIInputRadiusKey]) ?? 0.0
+
+        appendFloat(highlightAmount, to: &data)
+        appendFloat(shadowAmount, to: &data)
+        appendFloat(radius, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeSpotLight(parameters: [String: Any], into data: inout Data) {
+        // Padding to align vec4s
+        appendFloat(0.0, to: &data)
+        appendFloat(0.0, to: &data)
+
+        let lightPosition = vectorValue(parameters["inputLightPosition"]) ?? [400.0, 600.0, 150.0]
+        let lightPointsAt = vectorValue(parameters["inputLightPointsAt"]) ?? [200.0, 200.0, 0.0]
+        let brightness = floatValue(parameters[kCIInputBrightnessKey]) ?? 3.0
+        let concentration = floatValue(parameters["inputConcentration"]) ?? 0.1
+
+        // Light position (vec4 for alignment)
+        appendFloat(lightPosition.count > 0 ? lightPosition[0] : 400.0, to: &data)
+        appendFloat(lightPosition.count > 1 ? lightPosition[1] : 600.0, to: &data)
+        appendFloat(lightPosition.count > 2 ? lightPosition[2] : 150.0, to: &data)
+        appendFloat(0.0, to: &data)  // vec4 padding
+
+        // Light points at (vec4 for alignment)
+        appendFloat(lightPointsAt.count > 0 ? lightPointsAt[0] : 200.0, to: &data)
+        appendFloat(lightPointsAt.count > 1 ? lightPointsAt[1] : 200.0, to: &data)
+        appendFloat(lightPointsAt.count > 2 ? lightPointsAt[2] : 0.0, to: &data)
+        appendFloat(0.0, to: &data)  // vec4 padding
+
+        let color = colorValue(parameters[kCIInputColorKey]) ?? [1.0, 1.0, 1.0, 1.0]
+        appendVec4(color, to: &data)
+
+        appendFloat(brightness, to: &data)
+        appendFloat(concentration, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeSpotColor(parameters: [String: Any], into data: inout Data) {
+        // Padding to align vec4s
+        appendFloat(0.0, to: &data)
+        appendFloat(0.0, to: &data)
+
+        let centerColor1 = colorValue(parameters["inputCenterColor1"]) ?? [0.0, 0.0, 1.0, 1.0]
+        let replacementColor1 = colorValue(parameters["inputReplacementColor1"]) ?? [1.0, 0.0, 0.0, 1.0]
+        let closeness1 = floatValue(parameters["inputCloseness1"]) ?? 0.22
+        let contrast1 = floatValue(parameters["inputContrast1"]) ?? 0.98
+
+        appendVec4(centerColor1, to: &data)
+        appendVec4(replacementColor1, to: &data)
+        appendFloat(closeness1, to: &data)
+        appendFloat(contrast1, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeLineOverlay(parameters: [String: Any], into data: inout Data) {
+        let nrNoiseLevel = floatValue(parameters["inputNRNoiseLevel"]) ?? 0.07
+        let nrSharpness = floatValue(parameters["inputNRSharpness"]) ?? 0.71
+        let edgeIntensity = floatValue(parameters["inputEdgeIntensity"]) ?? 1.0
+        let threshold = floatValue(parameters[kCIInputThresholdKey]) ?? 0.1
+        let contrast = floatValue(parameters[kCIInputContrastKey]) ?? 50.0
+
+        appendFloat(nrNoiseLevel, to: &data)
+        appendFloat(nrSharpness, to: &data)
+        appendFloat(edgeIntensity, to: &data)
+        appendFloat(threshold, to: &data)
+        appendFloat(contrast, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    private static func encodeMix(parameters: [String: Any], into data: inout Data) {
+        let amount = floatValue(parameters["inputAmount"]) ?? 1.0
+
+        appendFloat(amount, to: &data)
+        appendFloat(0.0, to: &data)  // Padding
+    }
+
+    // MARK: - Additional Tile Effect Encoders
+
+    private static func encodeClamp(parameters: [String: Any], into data: inout Data) {
+        let extent = rectValue(parameters["inputExtent"]) ?? (0.0, 0.0, 640.0, 80.0)
+
+        appendFloat(extent.0, to: &data)  // x
+        appendFloat(extent.1, to: &data)  // y
+        appendFloat(extent.2, to: &data)  // width
+        appendFloat(extent.3, to: &data)  // height
+    }
+
+    private static func encodeEightfoldReflectedTile(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let tileWidth = floatValue(parameters["inputWidth"]) ?? 100.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(tileWidth, to: &data)
+    }
+
+    private static func encodeTwelvefoldReflectedTile(parameters: [String: Any], imageWidth: Int, imageHeight: Int, into data: inout Data) {
+        let center = point2Value(parameters[kCIInputCenterKey]) ?? (Float(imageWidth) / 2.0, Float(imageHeight) / 2.0)
+        let angle = floatValue(parameters[kCIInputAngleKey]) ?? 0.0
+        let tileWidth = floatValue(parameters["inputWidth"]) ?? 100.0
+
+        appendFloat(center.0, to: &data)
+        appendFloat(center.1, to: &data)
+        appendFloat(angle, to: &data)
+        appendFloat(tileWidth, to: &data)
+    }
+
+    private static func encodePerspectiveTile(parameters: [String: Any], into data: inout Data) {
+        let tl = point2Value(parameters["inputTopLeft"]) ?? (118.0, 484.0)
+        let tr = point2Value(parameters["inputTopRight"]) ?? (646.0, 507.0)
+        let br = point2Value(parameters["inputBottomRight"]) ?? (548.0, 140.0)
+        let bl = point2Value(parameters["inputBottomLeft"]) ?? (155.0, 153.0)
+
+        appendFloat(tl.0, to: &data)
+        appendFloat(tl.1, to: &data)
+        appendFloat(tr.0, to: &data)
+        appendFloat(tr.1, to: &data)
+        appendFloat(br.0, to: &data)
+        appendFloat(br.1, to: &data)
+        appendFloat(bl.0, to: &data)
+        appendFloat(bl.1, to: &data)
     }
 
     // MARK: - Helper Methods

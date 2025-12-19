@@ -97,9 +97,17 @@ internal struct WGSLShaderRegistry {
         "CITwirlDistortion": twirlDistortionWGSL,
         "CIPinchDistortion": pinchDistortionWGSL,
         "CIBumpDistortion": bumpDistortionWGSL,
+        "CIBumpDistortionLinear": bumpDistortionLinearWGSL,
         "CIHoleDistortion": holeDistortionWGSL,
         "CICircleSplashDistortion": circleSplashDistortionWGSL,
         "CIVortexDistortion": vortexDistortionWGSL,
+        "CICircularWrap": circularWrapWGSL,
+        "CITorusLensDistortion": torusLensDistortionWGSL,
+        "CILightTunnel": lightTunnelWGSL,
+        "CIDroste": drosteWGSL,
+        "CIStretchCrop": stretchCropWGSL,
+        "CIGlassDistortion": glassDistortionWGSL,
+        "CIDisplacementDistortion": displacementDistortionWGSL,
 
         // Composite operations
         "CISourceOverCompositing": sourceOverCompositingWGSL,
@@ -134,33 +142,42 @@ internal struct WGSLShaderRegistry {
         "CIConstantColorGenerator": constantColorGeneratorWGSL,
         "CILinearGradient": linearGradientWGSL,
         "CIRadialGradient": radialGradientWGSL,
+        "CIGaussianGradient": gaussianGradientWGSL,
+        "CISmoothLinearGradient": smoothLinearGradientWGSL,
+        "CIHueSaturationValueGradient": hueSaturationValueGradientWGSL,
         "CICheckerboardGenerator": checkerboardGeneratorWGSL,
         "CIStripesGenerator": stripesGeneratorWGSL,
         "CIRandomGenerator": randomGeneratorWGSL,
         "CIRoundedRectangleGenerator": roundedRectangleGeneratorWGSL,
         "CIStarShineGenerator": starShineGeneratorWGSL,
         "CISunbeamsGenerator": sunbeamsGeneratorWGSL,
+        "CILenticularHaloGenerator": lenticularHaloGeneratorWGSL,
 
         // Halftone effect filters
         "CIDotScreen": dotScreenWGSL,
         "CILineScreen": lineScreenWGSL,
         "CICircularScreen": circularScreenWGSL,
         "CIHatchedScreen": hatchedScreenWGSL,
+        "CICMYKHalftone": cmykHalftoneWGSL,
 
         // Tile effect filters
         "CIKaleidoscope": kaleidoscopeWGSL,
         "CIAffineTile": affineTileWGSL,
         "CIAffineClamp": affineClampWGSL,
+        "CIClamp": clampWGSL,
         "CIFourfoldReflectedTile": fourfoldReflectedTileWGSL,
         "CIFourfoldRotatedTile": fourfoldRotatedTileWGSL,
         "CIFourfoldTranslatedTile": fourfoldTranslatedTileWGSL,
         "CISixfoldReflectedTile": sixfoldReflectedTileWGSL,
         "CISixfoldRotatedTile": sixfoldRotatedTileWGSL,
+        "CIEightfoldReflectedTile": eightfoldReflectedTileWGSL,
+        "CITwelvefoldReflectedTile": twelvefoldReflectedTileWGSL,
         "CITriangleTile": triangleTileWGSL,
         "CIOpTile": opTileWGSL,
         "CIParallelogramTile": parallelogramTileWGSL,
         "CITriangleKaleidoscope": triangleKaleidoscopeWGSL,
         "CIGlideReflectedTile": glideReflectedTileWGSL,
+        "CIPerspectiveTile": perspectiveTileWGSL,
 
         // Stylizing filters
         "CIPixellate": pixellateWGSL,
@@ -171,6 +188,23 @@ internal struct WGSLShaderRegistry {
         "CIPointillize": pointillizeWGSL,
         "CIGloom": gloomWGSL,
         "CIHexagonalPixellate": hexagonalPixellateWGSL,
+        "CIMix": mixWGSL,
+        "CIBlendWithMask": blendWithMaskWGSL,
+        "CIBlendWithAlphaMask": blendWithAlphaMaskWGSL,
+        "CIBlendWithRedMask": blendWithRedMaskWGSL,
+        "CIBlendWithBlueMask": blendWithBlueMaskWGSL,
+        "CIHighlightShadowAdjust": highlightShadowAdjustWGSL,
+        "CISpotLight": spotLightWGSL,
+        "CISpotColor": spotColorWGSL,
+        "CILineOverlay": lineOverlayWGSL,
+        "CIComicEffect": comicEffectWGSL,
+
+        // Convolution filters
+        "CIConvolution3X3": convolution3X3WGSL,
+        "CIConvolution5X5": convolution5X5WGSL,
+        "CIConvolution7X7": convolution7X7WGSL,
+        "CIConvolution9Horizontal": convolution9HorizontalWGSL,
+        "CIConvolution9Vertical": convolution9VerticalWGSL,
 
         // Transition filters
         "CIDissolveTransition": dissolveTransitionWGSL,
@@ -192,6 +226,19 @@ internal struct WGSLShaderRegistry {
         "CIPerspectiveTransform": perspectiveTransformWGSL,
         "CIPerspectiveCorrection": perspectiveCorrectionWGSL,
         "CILanczosScaleTransform": lanczosScaleTransformWGSL,
+
+        // Reduction filters
+        "CIAreaAverage": areaAverageWGSL,
+        "CIAreaMaximum": areaMaximumWGSL,
+        "CIAreaMinimum": areaMinimumWGSL,
+        "CIAreaMaximumAlpha": areaMaximumAlphaWGSL,
+        "CIAreaMinimumAlpha": areaMinimumAlphaWGSL,
+        "CIAreaMinMax": areaMinMaxWGSL,
+        "CIAreaMinMaxRed": areaMinMaxRedWGSL,
+        "CIRowAverage": rowAverageWGSL,
+        "CIColumnAverage": columnAverageWGSL,
+        "CIAreaHistogram": areaHistogramWGSL,
+        "CIHistogramDisplayFilter": histogramDisplayFilterWGSL,
     ]
 
     // MARK: - Utility Shaders
@@ -5542,6 +5589,1854 @@ internal struct WGSLShaderRegistry {
         }
 
         textureStore(outputTexture, coords, clamp(color, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    // MARK: - Reduction Filter Shaders
+
+    // Note: Reduction filters compute aggregates over image regions.
+    // These implementations use a single-pass approach suitable for moderate image sizes.
+    // For very large images, a multi-pass hierarchical reduction would be more efficient.
+
+    private static let areaAverageWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        // Region to average (x, y, width, height)
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    // Workgroup shared memory for reduction
+    var<workgroup> partialSum: array<vec4<f32>, 256>;
+    var<workgroup> partialCount: array<u32, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+        let regionEndX = i32(params.regionX + params.regionW);
+        let regionEndY = i32(params.regionY + params.regionH);
+
+        var sum = vec4<f32>(0.0);
+        var count: u32 = 0u;
+
+        // Each thread processes a portion of the region
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                sum = sum + textureLoad(inputTexture, vec2<i32>(px, py), 0);
+                count = count + 1u;
+            }
+        }
+
+        partialSum[localIdx] = sum;
+        partialCount[localIdx] = count;
+        workgroupBarrier();
+
+        // Reduction in shared memory
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                partialSum[localIdx] = partialSum[localIdx] + partialSum[localIdx + stride];
+                partialCount[localIdx] = partialCount[localIdx] + partialCount[localIdx + stride];
+            }
+            workgroupBarrier();
+        }
+
+        // First thread writes result
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            var result = vec4<f32>(0.0);
+            if (partialCount[0] > 0u) {
+                result = partialSum[0] / f32(partialCount[0]);
+            }
+            textureStore(outputTexture, vec2<i32>(0, 0), result);
+        }
+    }
+    """
+
+    private static let areaMaximumWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialMax: array<vec4<f32>, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var maxVal = vec4<f32>(0.0);
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                maxVal = max(maxVal, textureLoad(inputTexture, vec2<i32>(px, py), 0));
+            }
+        }
+
+        partialMax[localIdx] = maxVal;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                partialMax[localIdx] = max(partialMax[localIdx], partialMax[localIdx + stride]);
+            }
+            workgroupBarrier();
+        }
+
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), partialMax[0]);
+        }
+    }
+    """
+
+    private static let areaMinimumWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialMin: array<vec4<f32>, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var minVal = vec4<f32>(1.0);
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                minVal = min(minVal, textureLoad(inputTexture, vec2<i32>(px, py), 0));
+            }
+        }
+
+        partialMin[localIdx] = minVal;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                partialMin[localIdx] = min(partialMin[localIdx], partialMin[localIdx + stride]);
+            }
+            workgroupBarrier();
+        }
+
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), partialMin[0]);
+        }
+    }
+    """
+
+    private static let areaMaximumAlphaWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialColor: array<vec4<f32>, 256>;
+    var<workgroup> partialAlpha: array<f32, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var maxAlpha: f32 = 0.0;
+        var resultColor = vec4<f32>(0.0);
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                let color = textureLoad(inputTexture, vec2<i32>(px, py), 0);
+                if (color.a > maxAlpha) {
+                    maxAlpha = color.a;
+                    resultColor = color;
+                }
+            }
+        }
+
+        partialColor[localIdx] = resultColor;
+        partialAlpha[localIdx] = maxAlpha;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                if (partialAlpha[localIdx + stride] > partialAlpha[localIdx]) {
+                    partialAlpha[localIdx] = partialAlpha[localIdx + stride];
+                    partialColor[localIdx] = partialColor[localIdx + stride];
+                }
+            }
+            workgroupBarrier();
+        }
+
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), partialColor[0]);
+        }
+    }
+    """
+
+    private static let areaMinimumAlphaWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialColor: array<vec4<f32>, 256>;
+    var<workgroup> partialAlpha: array<f32, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var minAlpha: f32 = 1.0;
+        var resultColor = vec4<f32>(1.0);
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                let color = textureLoad(inputTexture, vec2<i32>(px, py), 0);
+                if (color.a < minAlpha) {
+                    minAlpha = color.a;
+                    resultColor = color;
+                }
+            }
+        }
+
+        partialColor[localIdx] = resultColor;
+        partialAlpha[localIdx] = minAlpha;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                if (partialAlpha[localIdx + stride] < partialAlpha[localIdx]) {
+                    partialAlpha[localIdx] = partialAlpha[localIdx + stride];
+                    partialColor[localIdx] = partialColor[localIdx + stride];
+                }
+            }
+            workgroupBarrier();
+        }
+
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), partialColor[0]);
+        }
+    }
+    """
+
+    // CIAreaMinMax outputs min in RGB, max in A (encoded specially)
+    // For a proper implementation, this would need a 2-pixel output or special encoding
+    private static let areaMinMaxWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialMin: array<vec4<f32>, 256>;
+    var<workgroup> partialMax: array<vec4<f32>, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var minVal = vec4<f32>(1.0);
+        var maxVal = vec4<f32>(0.0);
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                let color = textureLoad(inputTexture, vec2<i32>(px, py), 0);
+                minVal = min(minVal, color);
+                maxVal = max(maxVal, color);
+            }
+        }
+
+        partialMin[localIdx] = minVal;
+        partialMax[localIdx] = maxVal;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                partialMin[localIdx] = min(partialMin[localIdx], partialMin[localIdx + stride]);
+                partialMax[localIdx] = max(partialMax[localIdx], partialMax[localIdx + stride]);
+            }
+            workgroupBarrier();
+        }
+
+        // Output: write min to (0,0) and max to (1,0)
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), partialMin[0]);
+            textureStore(outputTexture, vec2<i32>(1, 0), partialMax[0]);
+        }
+    }
+    """
+
+    private static let areaMinMaxRedWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    var<workgroup> partialMinRed: array<f32, 256>;
+    var<workgroup> partialMaxRed: array<f32, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+
+        var minRed: f32 = 1.0;
+        var maxRed: f32 = 0.0;
+
+        let pixelsPerThread = max(1u, u32(params.regionW * params.regionH) / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, u32(params.regionW * params.regionH));
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                let color = textureLoad(inputTexture, vec2<i32>(px, py), 0);
+                minRed = min(minRed, color.r);
+                maxRed = max(maxRed, color.r);
+            }
+        }
+
+        partialMinRed[localIdx] = minRed;
+        partialMaxRed[localIdx] = maxRed;
+        workgroupBarrier();
+
+        for (var stride = 128u; stride > 0u; stride = stride >> 1u) {
+            if (localIdx < stride) {
+                partialMinRed[localIdx] = min(partialMinRed[localIdx], partialMinRed[localIdx + stride]);
+                partialMaxRed[localIdx] = max(partialMaxRed[localIdx], partialMaxRed[localIdx + stride]);
+            }
+            workgroupBarrier();
+        }
+
+        // Output: min red in R channel, max red in G channel
+        if (localIdx == 0u && wgId.x == 0u && wgId.y == 0u) {
+            textureStore(outputTexture, vec2<i32>(0, 0), vec4<f32>(partialMinRed[0], partialMaxRed[0], 0.0, 1.0));
+        }
+    }
+    """
+
+    private static let rowAverageWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(1, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let row = i32(gid.y);
+        if (row >= i32(params.height)) { return; }
+
+        let regionStartX = i32(params.regionX);
+        let regionEndX = i32(params.regionX + params.regionW);
+
+        var sum = vec4<f32>(0.0);
+        var count: f32 = 0.0;
+
+        for (var x = regionStartX; x < regionEndX; x = x + 1) {
+            if (x >= 0 && x < i32(params.width)) {
+                sum = sum + textureLoad(inputTexture, vec2<i32>(x, row), 0);
+                count = count + 1.0;
+            }
+        }
+
+        var result = vec4<f32>(0.0);
+        if (count > 0.0) {
+            result = sum / count;
+        }
+
+        // Output is 1 pixel wide, height pixels tall
+        textureStore(outputTexture, vec2<i32>(0, row), result);
+    }
+    """
+
+    private static let columnAverageWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 1)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let col = i32(gid.x);
+        if (col >= i32(params.width)) { return; }
+
+        let regionStartY = i32(params.regionY);
+        let regionEndY = i32(params.regionY + params.regionH);
+
+        var sum = vec4<f32>(0.0);
+        var count: f32 = 0.0;
+
+        for (var y = regionStartY; y < regionEndY; y = y + 1) {
+            if (y >= 0 && y < i32(params.height)) {
+                sum = sum + textureLoad(inputTexture, vec2<i32>(col, y), 0);
+                count = count + 1.0;
+            }
+        }
+
+        var result = vec4<f32>(0.0);
+        if (count > 0.0) {
+            result = sum / count;
+        }
+
+        // Output is width pixels wide, 1 pixel tall
+        textureStore(outputTexture, vec2<i32>(col, 0), result);
+    }
+    """
+
+    private static let areaHistogramWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        regionX: f32,
+        regionY: f32,
+        regionW: f32,
+        regionH: f32,
+        binCount: f32,
+        scale: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    // Histogram bins for each channel (256 bins max)
+    var<workgroup> histR: array<atomic<u32>, 256>;
+    var<workgroup> histG: array<atomic<u32>, 256>;
+    var<workgroup> histB: array<atomic<u32>, 256>;
+    var<workgroup> histA: array<atomic<u32>, 256>;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>,
+            @builtin(local_invocation_index) localIdx: u32,
+            @builtin(workgroup_id) wgId: vec3<u32>) {
+        // Initialize histogram bins
+        if (localIdx < 256u) {
+            atomicStore(&histR[localIdx], 0u);
+            atomicStore(&histG[localIdx], 0u);
+            atomicStore(&histB[localIdx], 0u);
+            atomicStore(&histA[localIdx], 0u);
+        }
+        workgroupBarrier();
+
+        let regionStartX = i32(params.regionX);
+        let regionStartY = i32(params.regionY);
+        let bins = u32(params.binCount);
+
+        // Each thread processes a portion of the region
+        let totalPixels = u32(params.regionW * params.regionH);
+        let pixelsPerThread = max(1u, totalPixels / 256u);
+        let startPixel = localIdx * pixelsPerThread;
+        let endPixel = min(startPixel + pixelsPerThread, totalPixels);
+
+        for (var i = startPixel; i < endPixel; i = i + 1u) {
+            let px = regionStartX + i32(i % u32(params.regionW));
+            let py = regionStartY + i32(i / u32(params.regionW));
+
+            if (px >= 0 && px < i32(params.width) && py >= 0 && py < i32(params.height)) {
+                let color = textureLoad(inputTexture, vec2<i32>(px, py), 0);
+
+                let binR = min(u32(color.r * f32(bins)), bins - 1u);
+                let binG = min(u32(color.g * f32(bins)), bins - 1u);
+                let binB = min(u32(color.b * f32(bins)), bins - 1u);
+                let binA = min(u32(color.a * f32(bins)), bins - 1u);
+
+                atomicAdd(&histR[binR], 1u);
+                atomicAdd(&histG[binG], 1u);
+                atomicAdd(&histB[binB], 1u);
+                atomicAdd(&histA[binA], 1u);
+            }
+        }
+        workgroupBarrier();
+
+        // Write histogram to output texture (bins x 1 pixels)
+        // Each pixel stores normalized histogram values for R, G, B, A channels
+        if (localIdx < bins && wgId.x == 0u && wgId.y == 0u) {
+            let totalPixelsF = params.regionW * params.regionH;
+            let normalizeScale = params.scale / totalPixelsF;
+
+            let r = f32(atomicLoad(&histR[localIdx])) * normalizeScale;
+            let g = f32(atomicLoad(&histG[localIdx])) * normalizeScale;
+            let b = f32(atomicLoad(&histB[localIdx])) * normalizeScale;
+            let a = f32(atomicLoad(&histA[localIdx])) * normalizeScale;
+
+            textureStore(outputTexture, vec2<i32>(i32(localIdx), 0), vec4<f32>(r, g, b, a));
+        }
+    }
+    """
+
+    private static let histogramDisplayFilterWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        histogramWidth: f32,
+        lowLimit: f32,
+        highLimit: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;  // Histogram data (Nx1)
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Map x coordinate to histogram bin
+        let binIndex = i32(f32(coords.x) / f32(params.width) * params.histogramWidth);
+
+        // Get histogram value at this bin
+        let histValue = textureLoad(inputTexture, vec2<i32>(binIndex, 0), 0);
+
+        // Map y coordinate to value range (0 at top, 1 at bottom in display)
+        let yNorm = 1.0 - f32(coords.y) / f32(params.height);
+
+        // Check if this pixel should be lit based on histogram value
+        var color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+
+        // Red channel histogram
+        if (yNorm <= histValue.r && yNorm >= params.lowLimit && yNorm <= params.highLimit) {
+            color.r = 1.0;
+        }
+        // Green channel histogram
+        if (yNorm <= histValue.g && yNorm >= params.lowLimit && yNorm <= params.highLimit) {
+            color.g = 1.0;
+        }
+        // Blue channel histogram
+        if (yNorm <= histValue.b && yNorm >= params.lowLimit && yNorm <= params.highLimit) {
+            color.b = 1.0;
+        }
+
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    // MARK: - Additional Distortion Filter Shaders
+
+    private static let bumpDistortionLinearWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        radius: f32,
+        angle: f32,
+        scale: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let dir = vec2<f32>(cos(params.angle), sin(params.angle));
+
+        // Project position onto the line direction
+        let diff = pos - center;
+        let proj = dot(diff, dir);
+        let perpDist = length(diff - dir * proj);
+
+        var displacement = vec2<f32>(0.0);
+        if (perpDist < params.radius) {
+            let factor = 1.0 - perpDist / params.radius;
+            let bump = factor * factor * params.scale;
+            let perpDir = vec2<f32>(-dir.y, dir.x);
+            displacement = perpDir * bump * sign(dot(diff, perpDir));
+        }
+
+        let samplePos = vec2<i32>(pos - displacement);
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let circularWrapWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        radius: f32,
+        angle: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let diff = pos - center;
+        let dist = length(diff);
+        let theta = atan2(diff.y, diff.x) + params.angle;
+
+        // Wrap around cylinder
+        let u = theta / (2.0 * 3.14159) * f32(params.width);
+        let v = dist / params.radius * f32(params.height);
+
+        let samplePos = vec2<i32>(i32(u) % i32(params.width), i32(v) % i32(params.height));
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let torusLensDistortionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        radius: f32,
+        ringRadius: f32,
+        refraction: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let diff = pos - center;
+        let dist = length(diff);
+
+        var samplePos = pos;
+        let torusCenter = params.radius;
+        let distFromTorus = abs(dist - torusCenter);
+
+        if (distFromTorus < params.ringRadius) {
+            let t = 1.0 - distFromTorus / params.ringRadius;
+            let displacement = t * t * params.refraction;
+            let dir = normalize(diff);
+            samplePos = pos + dir * displacement;
+        }
+
+        let clampedPos = clamp(vec2<i32>(samplePos), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let lightTunnelWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        rotation: f32,
+        radius: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let diff = pos - center;
+        let dist = length(diff);
+        let angle = atan2(diff.y, diff.x);
+
+        // Create tunnel effect by mapping based on distance
+        let newAngle = angle + params.rotation * (1.0 - dist / params.radius);
+        let newDist = dist;
+
+        let samplePos = center + vec2<f32>(cos(newAngle), sin(newAngle)) * newDist;
+        let clampedPos = clamp(vec2<i32>(samplePos), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let drosteWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        innerRadius: f32,
+        outerRadius: f32,
+        periodicity: f32,
+        rotation: f32,
+        zoom: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(f32(params.width) / 2.0, f32(params.height) / 2.0);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let diff = pos - center;
+        var r = length(diff);
+        var theta = atan2(diff.y, diff.x);
+
+        // Droste effect: logarithmic spiral mapping
+        let logR = log(r / params.innerRadius) / log(params.outerRadius / params.innerRadius);
+        let newR = params.innerRadius * pow(params.outerRadius / params.innerRadius, fract(logR * params.periodicity + theta / (2.0 * 3.14159) + params.rotation));
+
+        let samplePos = center + vec2<f32>(cos(theta), sin(theta)) * newR * params.zoom;
+        let clampedPos = clamp(vec2<i32>(samplePos), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let stretchCropWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        sizeX: f32,
+        sizeY: f32,
+        cropAmount: f32,
+        centerStretch: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let dims = textureDimensions(inputTexture);
+        let uv = vec2<f32>(f32(coords.x) / f32(params.width), f32(coords.y) / f32(params.height));
+
+        // Apply crop and stretch
+        let croppedUV = (uv - 0.5) * (1.0 + params.cropAmount) + 0.5;
+        let stretchedUV = mix(croppedUV, vec2<f32>(0.5), params.centerStretch * (1.0 - abs(croppedUV - 0.5) * 2.0));
+
+        let samplePos = vec2<i32>(stretchedUV * vec2<f32>(f32(dims.x), f32(dims.y)));
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(dims.x) - 1, i32(dims.y) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let glassDistortionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        scale: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var displacementTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Sample displacement texture for glass-like distortion
+        let dispSample = textureLoad(displacementTexture, coords, 0);
+        // Use red and green channels for x and y displacement
+        let displacement = (dispSample.rg - 0.5) * 2.0 * params.scale;
+
+        let samplePos = vec2<i32>(vec2<f32>(coords) + displacement);
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let displacementDistortionWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        scale: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var displacementTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Sample displacement map
+        let dispSample = textureLoad(displacementTexture, coords, 0);
+        // Use red and green channels for x and y displacement
+        let displacement = (dispSample.rg - 0.5) * 2.0 * params.scale;
+
+        let samplePos = vec2<i32>(vec2<f32>(coords) + displacement);
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    // MARK: - Additional Gradient Filter Shaders
+
+    private static let gaussianGradientWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        radius: f32,
+        _padding: f32,
+        color0: vec4<f32>,
+        color1: vec4<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let dist = length(pos - center);
+
+        // Gaussian falloff
+        let sigma = params.radius / 3.0;
+        let t = exp(-(dist * dist) / (2.0 * sigma * sigma));
+
+        let color = mix(params.color1, params.color0, t);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let smoothLinearGradientWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        point0X: f32,
+        point0Y: f32,
+        point1X: f32,
+        point1Y: f32,
+        color0: vec4<f32>,
+        color1: vec4<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let p0 = vec2<f32>(params.point0X, params.point0Y);
+        let p1 = vec2<f32>(params.point1X, params.point1Y);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+
+        let dir = p1 - p0;
+        let len = length(dir);
+        let t = clamp(dot(pos - p0, dir) / (len * len), 0.0, 1.0);
+
+        // Smooth interpolation
+        let smoothT = t * t * (3.0 - 2.0 * t);
+        let color = mix(params.color0, params.color1, smoothT);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let hueSaturationValueGradientWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        value: f32,
+        softness: f32,
+        dither: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    fn hsv2rgb(h: f32, s: f32, v: f32) -> vec3<f32> {
+        let c = v * s;
+        let x = c * (1.0 - abs(((h / 60.0) % 2.0) - 1.0));
+        let m = v - c;
+
+        var rgb: vec3<f32>;
+        if (h < 60.0) { rgb = vec3<f32>(c, x, 0.0); }
+        else if (h < 120.0) { rgb = vec3<f32>(x, c, 0.0); }
+        else if (h < 180.0) { rgb = vec3<f32>(0.0, c, x); }
+        else if (h < 240.0) { rgb = vec3<f32>(0.0, x, c); }
+        else if (h < 300.0) { rgb = vec3<f32>(x, 0.0, c); }
+        else { rgb = vec3<f32>(c, 0.0, x); }
+
+        return rgb + vec3<f32>(m);
+    }
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let u = f32(coords.x) / f32(params.width);
+        let v = f32(coords.y) / f32(params.height);
+
+        let hue = u * 360.0;
+        let saturation = 1.0 - v;
+        let rgb = hsv2rgb(hue, saturation, params.value);
+
+        textureStore(outputTexture, coords, vec4<f32>(rgb, 1.0));
+    }
+    """
+
+    private static let lenticularHaloGeneratorWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        haloRadius: f32,
+        haloWidth: f32,
+        haloOverlap: f32,
+        striationStrength: f32,
+        striationContrast: f32,
+        time: f32,
+        color: vec4<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y));
+        let dist = length(pos - center);
+        let angle = atan2(pos.y - center.y, pos.x - center.x);
+
+        // Halo ring
+        let distFromRing = abs(dist - params.haloRadius);
+        let haloIntensity = max(0.0, 1.0 - distFromRing / params.haloWidth);
+
+        // Striations
+        let striation = sin(angle * 20.0 + params.time) * params.striationStrength;
+        let finalIntensity = haloIntensity * (1.0 + striation * params.striationContrast);
+
+        let color = params.color * finalIntensity;
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    // MARK: - Convolution Filter Shaders
+
+    private static let convolution3X3WGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        bias: f32,
+        _padding: f32,
+        weights: array<f32, 9>,
+        _padding2: array<f32, 3>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        var sum = vec4<f32>(0.0);
+        for (var dy = -1; dy <= 1; dy = dy + 1) {
+            for (var dx = -1; dx <= 1; dx = dx + 1) {
+                let sampleCoord = clamp(coords + vec2<i32>(dx, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+                let weight = params.weights[(dy + 1) * 3 + (dx + 1)];
+                sum = sum + textureLoad(inputTexture, sampleCoord, 0) * weight;
+            }
+        }
+
+        sum = sum + vec4<f32>(params.bias);
+        textureStore(outputTexture, coords, clamp(sum, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    private static let convolution5X5WGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        bias: f32,
+        _padding: f32,
+        weights: array<f32, 25>,
+        _padding2: array<f32, 3>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        var sum = vec4<f32>(0.0);
+        for (var dy = -2; dy <= 2; dy = dy + 1) {
+            for (var dx = -2; dx <= 2; dx = dx + 1) {
+                let sampleCoord = clamp(coords + vec2<i32>(dx, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+                let weight = params.weights[(dy + 2) * 5 + (dx + 2)];
+                sum = sum + textureLoad(inputTexture, sampleCoord, 0) * weight;
+            }
+        }
+
+        sum = sum + vec4<f32>(params.bias);
+        textureStore(outputTexture, coords, clamp(sum, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    private static let convolution7X7WGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        bias: f32,
+        _padding: f32,
+        weights: array<f32, 49>,
+        _padding2: array<f32, 3>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        var sum = vec4<f32>(0.0);
+        for (var dy = -3; dy <= 3; dy = dy + 1) {
+            for (var dx = -3; dx <= 3; dx = dx + 1) {
+                let sampleCoord = clamp(coords + vec2<i32>(dx, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+                let weight = params.weights[(dy + 3) * 7 + (dx + 3)];
+                sum = sum + textureLoad(inputTexture, sampleCoord, 0) * weight;
+            }
+        }
+
+        sum = sum + vec4<f32>(params.bias);
+        textureStore(outputTexture, coords, clamp(sum, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    private static let convolution9HorizontalWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        bias: f32,
+        _padding: f32,
+        weights: array<f32, 9>,
+        _padding2: array<f32, 3>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        var sum = vec4<f32>(0.0);
+        for (var dx = -4; dx <= 4; dx = dx + 1) {
+            let sampleCoord = clamp(coords + vec2<i32>(dx, 0), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+            let weight = params.weights[dx + 4];
+            sum = sum + textureLoad(inputTexture, sampleCoord, 0) * weight;
+        }
+
+        sum = sum + vec4<f32>(params.bias);
+        textureStore(outputTexture, coords, clamp(sum, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    private static let convolution9VerticalWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        bias: f32,
+        _padding: f32,
+        weights: array<f32, 9>,
+        _padding2: array<f32, 3>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        var sum = vec4<f32>(0.0);
+        for (var dy = -4; dy <= 4; dy = dy + 1) {
+            let sampleCoord = clamp(coords + vec2<i32>(0, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+            let weight = params.weights[dy + 4];
+            sum = sum + textureLoad(inputTexture, sampleCoord, 0) * weight;
+        }
+
+        sum = sum + vec4<f32>(params.bias);
+        textureStore(outputTexture, coords, clamp(sum, vec4<f32>(0.0), vec4<f32>(1.0)));
+    }
+    """
+
+    // MARK: - Blend/Mix Filter Shaders
+
+    private static let mixWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        amount: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(3) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(inputTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+        let result = mix(bg, fg, params.amount);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let blendWithMaskWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var maskTexture: texture_2d<f32>;
+    @group(0) @binding(3) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(4) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(inputTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+        let maskPixel = textureLoad(maskTexture, coords, 0);
+        // Use grayscale value of mask
+        let mask = (maskPixel.r + maskPixel.g + maskPixel.b) / 3.0;
+        let result = mix(bg, fg, mask);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let blendWithAlphaMaskWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var maskTexture: texture_2d<f32>;
+    @group(0) @binding(3) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(4) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(inputTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+        let maskPixel = textureLoad(maskTexture, coords, 0);
+        // Use alpha channel of mask
+        let mask = maskPixel.a;
+        let result = mix(bg, fg, mask);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let blendWithRedMaskWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var maskTexture: texture_2d<f32>;
+    @group(0) @binding(3) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(4) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(inputTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+        let maskPixel = textureLoad(maskTexture, coords, 0);
+        // Use red channel of mask
+        let mask = maskPixel.r;
+        let result = mix(bg, fg, mask);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    private static let blendWithBlueMaskWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var backgroundTexture: texture_2d<f32>;
+    @group(0) @binding(2) var maskTexture: texture_2d<f32>;
+    @group(0) @binding(3) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(4) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let fg = textureLoad(inputTexture, coords, 0);
+        let bg = textureLoad(backgroundTexture, coords, 0);
+        let maskPixel = textureLoad(maskTexture, coords, 0);
+        // Use blue channel of mask
+        let mask = maskPixel.b;
+        let result = mix(bg, fg, mask);
+        textureStore(outputTexture, coords, result);
+    }
+    """
+
+    // MARK: - Additional Stylizing Filter Shaders
+
+    private static let highlightShadowAdjustWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        highlightAmount: f32,
+        shadowAmount: f32,
+        radius: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let color = textureLoad(inputTexture, coords, 0);
+        let lum = dot(color.rgb, vec3<f32>(0.299, 0.587, 0.114));
+
+        // Adjust highlights (bright areas)
+        let highlightMask = smoothstep(0.5, 1.0, lum);
+        let highlightAdjust = color.rgb * (1.0 + params.highlightAmount * highlightMask);
+
+        // Adjust shadows (dark areas)
+        let shadowMask = 1.0 - smoothstep(0.0, 0.5, lum);
+        let result = highlightAdjust * (1.0 + params.shadowAmount * shadowMask);
+
+        textureStore(outputTexture, coords, vec4<f32>(clamp(result, vec3<f32>(0.0), vec3<f32>(1.0)), color.a));
+    }
+    """
+
+    private static let spotLightWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        lightPosX: f32,
+        lightPosY: f32,
+        lightPosZ: f32,
+        lightPointsAtX: f32,
+        lightPointsAtY: f32,
+        lightPointsAtZ: f32,
+        brightness: f32,
+        concentration: f32,
+        color: vec4<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let color = textureLoad(inputTexture, coords, 0);
+        let pos = vec3<f32>(f32(coords.x), f32(coords.y), 0.0);
+        let lightPos = vec3<f32>(params.lightPosX, params.lightPosY, params.lightPosZ);
+        let lightDir = normalize(vec3<f32>(params.lightPointsAtX, params.lightPointsAtY, params.lightPointsAtZ) - lightPos);
+
+        let toPixel = normalize(pos - lightPos);
+        let spotEffect = pow(max(dot(toPixel, lightDir), 0.0), params.concentration);
+        let dist = length(pos - lightPos);
+        let attenuation = params.brightness / (1.0 + dist * 0.01);
+
+        let lighting = spotEffect * attenuation * params.color.rgb;
+        let result = color.rgb * (0.2 + lighting);
+
+        textureStore(outputTexture, coords, vec4<f32>(clamp(result, vec3<f32>(0.0), vec3<f32>(1.0)), color.a));
+    }
+    """
+
+    private static let spotColorWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerColorR: f32,
+        centerColorG: f32,
+        centerColorB: f32,
+        replacementColorR: f32,
+        replacementColorG: f32,
+        replacementColorB: f32,
+        closeness: f32,
+        contrast: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let color = textureLoad(inputTexture, coords, 0);
+        let centerColor = vec3<f32>(params.centerColorR, params.centerColorG, params.centerColorB);
+        let replacementColor = vec3<f32>(params.replacementColorR, params.replacementColorG, params.replacementColorB);
+
+        let dist = length(color.rgb - centerColor);
+        let mask = smoothstep(params.closeness, params.closeness * (1.0 - params.contrast), dist);
+
+        let result = mix(replacementColor, color.rgb, mask);
+        textureStore(outputTexture, coords, vec4<f32>(result, color.a));
+    }
+    """
+
+    private static let lineOverlayWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        noiseLevel: f32,
+        sharpness: f32,
+        edgeIntensity: f32,
+        threshold: f32,
+        contrast: f32,
+        _padding: f32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Sobel edge detection
+        var gx = vec3<f32>(0.0);
+        var gy = vec3<f32>(0.0);
+
+        let sobelX = array<f32, 9>(-1.0, 0.0, 1.0, -2.0, 0.0, 2.0, -1.0, 0.0, 1.0);
+        let sobelY = array<f32, 9>(-1.0, -2.0, -1.0, 0.0, 0.0, 0.0, 1.0, 2.0, 1.0);
+
+        for (var dy = -1; dy <= 1; dy = dy + 1) {
+            for (var dx = -1; dx <= 1; dx = dx + 1) {
+                let sampleCoord = clamp(coords + vec2<i32>(dx, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+                let sample = textureLoad(inputTexture, sampleCoord, 0).rgb;
+                let idx = (dy + 1) * 3 + (dx + 1);
+                gx = gx + sample * sobelX[idx];
+                gy = gy + sample * sobelY[idx];
+            }
+        }
+
+        let edge = length(gx) + length(gy);
+        let edgeValue = smoothstep(params.threshold, params.threshold + 0.1, edge * params.edgeIntensity);
+
+        let result = vec3<f32>(1.0 - edgeValue * params.contrast);
+        textureStore(outputTexture, coords, vec4<f32>(result, 1.0));
+    }
+    """
+
+    private static let comicEffectWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let color = textureLoad(inputTexture, coords, 0);
+
+        // Edge detection for ink lines
+        var edge: f32 = 0.0;
+        for (var dy = -1; dy <= 1; dy = dy + 1) {
+            for (var dx = -1; dx <= 1; dx = dx + 1) {
+                if (dx == 0 && dy == 0) { continue; }
+                let sampleCoord = clamp(coords + vec2<i32>(dx, dy), vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+                let sample = textureLoad(inputTexture, sampleCoord, 0);
+                edge = edge + length(color.rgb - sample.rgb);
+            }
+        }
+        edge = edge / 8.0;
+
+        // Posterize colors
+        let levels: f32 = 4.0;
+        let posterized = floor(color.rgb * levels) / levels;
+
+        // Combine
+        let inkLine = smoothstep(0.1, 0.3, edge);
+        let result = mix(posterized, vec3<f32>(0.0), inkLine);
+
+        textureStore(outputTexture, coords, vec4<f32>(result, color.a));
+    }
+    """
+
+    // MARK: - Additional Halftone Filter Shaders
+
+    private static let cmykHalftoneWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        dotWidth: f32,
+        angle: f32,
+        sharpness: f32,
+        gcr: f32,
+        ucr: f32,
+        _padding: f32,
+        _padding2: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    fn rotatePoint(p: vec2<f32>, angle: f32) -> vec2<f32> {
+        let c = cos(angle);
+        let s = sin(angle);
+        return vec2<f32>(p.x * c - p.y * s, p.x * s + p.y * c);
+    }
+
+    fn halftone(uv: vec2<f32>, angle: f32, value: f32) -> f32 {
+        let rotated = rotatePoint(uv, angle);
+        let grid = rotated / params.dotWidth;
+        let cellCenter = floor(grid) + 0.5;
+        let dist = length(fract(grid) - 0.5);
+        let radius = sqrt(value) * 0.5;
+        return smoothstep(radius + 0.1, radius - 0.1, dist);
+    }
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let color = textureLoad(inputTexture, coords, 0);
+        let uv = vec2<f32>(f32(coords.x) - params.centerX, f32(coords.y) - params.centerY);
+
+        // Convert RGB to CMYK
+        let k = 1.0 - max(max(color.r, color.g), color.b);
+        var c = (1.0 - color.r - k) / (1.0 - k + 0.001);
+        var m = (1.0 - color.g - k) / (1.0 - k + 0.001);
+        var y = (1.0 - color.b - k) / (1.0 - k + 0.001);
+
+        // Apply GCR/UCR
+        c = c * (1.0 - params.gcr * k);
+        m = m * (1.0 - params.gcr * k);
+        y = y * (1.0 - params.gcr * k);
+
+        // Halftone each channel at different angles
+        let cDot = halftone(uv, params.angle + 0.261799, c);
+        let mDot = halftone(uv, params.angle + 1.308997, m);
+        let yDot = halftone(uv, params.angle, y);
+        let kDot = halftone(uv, params.angle + 0.785398, k);
+
+        // Convert back to RGB
+        let resultR = (1.0 - cDot) * (1.0 - kDot);
+        let resultG = (1.0 - mDot) * (1.0 - kDot);
+        let resultB = (1.0 - yDot) * (1.0 - kDot);
+
+        textureStore(outputTexture, coords, vec4<f32>(resultR, resultG, resultB, color.a));
+    }
+    """
+
+    // MARK: - Additional Tile Effect Filter Shaders
+
+    private static let clampWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        extentX: f32,
+        extentY: f32,
+        extentW: f32,
+        extentH: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Clamp coordinates to extent
+        let clampedX = clamp(f32(coords.x), params.extentX, params.extentX + params.extentW - 1.0);
+        let clampedY = clamp(f32(coords.y), params.extentY, params.extentY + params.extentH - 1.0);
+
+        let samplePos = vec2<i32>(i32(clampedX), i32(clampedY));
+        let color = textureLoad(inputTexture, samplePos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let eightfoldReflectedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        // Rotate
+        let c = cos(-params.angle);
+        let s = sin(-params.angle);
+        var p = vec2<f32>(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+
+        // 8-fold symmetry
+        let angle = atan2(p.y, p.x);
+        let sector = floor(angle / (3.14159 / 4.0) + 0.5);
+        let sectorAngle = sector * 3.14159 / 4.0;
+
+        let cs = cos(-sectorAngle);
+        let ss = sin(-sectorAngle);
+        p = vec2<f32>(p.x * cs - p.y * ss, p.x * ss + p.y * cs);
+
+        // Reflect
+        p = abs(p);
+
+        // Tile
+        p = p % params.tileWidth;
+
+        let samplePos = vec2<i32>(p + center);
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let twelvefoldReflectedTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        centerX: f32,
+        centerY: f32,
+        angle: f32,
+        tileWidth: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        let center = vec2<f32>(params.centerX, params.centerY);
+        let pos = vec2<f32>(f32(coords.x), f32(coords.y)) - center;
+
+        let c = cos(-params.angle);
+        let s = sin(-params.angle);
+        var p = vec2<f32>(pos.x * c - pos.y * s, pos.x * s + pos.y * c);
+
+        // 12-fold symmetry
+        let angle = atan2(p.y, p.x);
+        let sector = floor(angle / (3.14159 / 6.0) + 0.5);
+        let sectorAngle = sector * 3.14159 / 6.0;
+
+        let cs = cos(-sectorAngle);
+        let ss = sin(-sectorAngle);
+        p = vec2<f32>(p.x * cs - p.y * ss, p.x * ss + p.y * cs);
+
+        p = abs(p);
+        p = p % params.tileWidth;
+
+        let samplePos = vec2<i32>(p + center);
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
+    }
+    """
+
+    private static let perspectiveTileWGSL = """
+    struct Params {
+        width: u32,
+        height: u32,
+        tlX: f32,
+        tlY: f32,
+        trX: f32,
+        trY: f32,
+        blX: f32,
+        blY: f32,
+        brX: f32,
+        brY: f32,
+        _padding: vec2<f32>,
+    }
+
+    @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+    @group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+    @group(0) @binding(2) var<uniform> params: Params;
+
+    @compute @workgroup_size(16, 16)
+    fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let coords = vec2<i32>(gid.xy);
+        if (coords.x >= i32(params.width) || coords.y >= i32(params.height)) { return; }
+
+        // Bilinear interpolation for perspective tile
+        let u = fract(f32(coords.x) / f32(params.width));
+        let v = fract(f32(coords.y) / f32(params.height));
+
+        let topX = mix(params.tlX, params.trX, u);
+        let topY = mix(params.tlY, params.trY, u);
+        let bottomX = mix(params.blX, params.brX, u);
+        let bottomY = mix(params.blY, params.brY, u);
+
+        let x = mix(topX, bottomX, v);
+        let y = mix(topY, bottomY, v);
+
+        let samplePos = vec2<i32>(i32(x), i32(y));
+        let clampedPos = clamp(samplePos, vec2<i32>(0), vec2<i32>(i32(params.width) - 1, i32(params.height) - 1));
+        let color = textureLoad(inputTexture, clampedPos, 0);
+        textureStore(outputTexture, coords, color);
     }
     """
 }

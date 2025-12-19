@@ -251,6 +251,30 @@ internal struct FilterGraphBuilder {
             }
             return inputExtent
 
+        case "CIStraighten":
+            // Straighten rotates the image, which may change the bounding box
+            // For simplicity, we preserve the extent (actual bounds depend on angle)
+            return inputExtent
+
+        case "CIPerspectiveTransform", "CIPerspectiveCorrection":
+            // Perspective transforms can significantly change the output extent
+            // For now, preserve the input extent (proper implementation would compute
+            // the bounding box of the transformed quad)
+            return inputExtent
+
+        case "CILanczosScaleTransform":
+            // Scale transform changes the output extent based on scale factor
+            if let scale = parameters["inputScale"] as? Double {
+                let aspectRatio = (parameters["inputAspectRatio"] as? Double) ?? 1.0
+                return CGRect(
+                    x: inputExtent.origin.x,
+                    y: inputExtent.origin.y,
+                    width: inputExtent.width * CGFloat(scale),
+                    height: inputExtent.height * CGFloat(scale / aspectRatio)
+                )
+            }
+            return inputExtent
+
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
              "CIStripesGenerator", "CIRandomGenerator",
              "CILinearGradient", "CIRadialGradient",
@@ -307,5 +331,14 @@ internal enum FilterCategory {
 
     /// Transition filter - 2 inputs (source + target), 1 output.
     case transition
+
+    /// Blend with mask filter - 3 inputs (input + background + mask), 1 output.
+    case blendWithMask
+
+    /// Reduction filter - 1 input, reduced output (single pixel or row/column).
+    case reduction
+
+    /// Displacement filter - 2 inputs (input + displacement texture), 1 output.
+    case displacement
 }
 #endif
