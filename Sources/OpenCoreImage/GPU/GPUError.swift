@@ -5,7 +5,6 @@
 //  GPU-related error types.
 //
 
-#if arch(wasm32)
 import Foundation
 
 /// Errors that can occur during GPU operations.
@@ -70,4 +69,3 @@ internal enum GPUError: Error, LocalizedError {
         }
     }
 }
-#endif

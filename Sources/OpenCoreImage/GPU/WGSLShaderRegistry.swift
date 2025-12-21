@@ -5,7 +5,6 @@
 //  Registry of WGSL compute shaders for built-in filters.
 //
 
-#if arch(wasm32)
 import Foundation
 
 /// Registry of WGSL compute shaders for built-in Core Image filters.
@@ -7440,4 +7439,3 @@ internal struct WGSLShaderRegistry {
     }
     """
 }
-#endif

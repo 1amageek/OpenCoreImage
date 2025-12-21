@@ -5,7 +5,6 @@
 //  DAG representation of filter graphs for multi-input filter support.
 //
 
-#if arch(wasm32)
 import Foundation
 
 /// Represents a node in the filter graph DAG.
@@ -341,4 +340,3 @@ internal enum FilterCategory {
     /// Displacement filter - 2 inputs (input + displacement texture), 1 output.
     case displacement
 }
-#endif

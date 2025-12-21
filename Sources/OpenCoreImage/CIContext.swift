@@ -7,11 +7,6 @@
 
 import Foundation
 
-#if arch(wasm32)
-import JavaScriptKit
-import SwiftWebGPU
-#endif
-
 /// The Core Image context class provides an evaluation context for Core Image processing.
 ///
 /// You use a `CIContext` instance to render a `CIImage` instance which represents a graph
@@ -27,13 +22,13 @@ public final class CIContext: @unchecked Sendable {
     internal let _workingColorSpace: CGColorSpace?
     internal let _workingFormat: CIFormat
 
-    #if arch(wasm32)
-    /// Cached GPU device for rendering.
-    private var _gpuDevice: GPUDevice?
+    // MARK: - Renderer
 
-    /// Task for GPU initialization.
-    private var _gpuInitTask: Task<GPUDevice, Error>?
-    #endif
+    /// The internal renderer that executes GPU operations.
+    ///
+    /// This is created internally based on the target architecture.
+    /// On WASM, `CIWebGPUContextRenderer` is used automatically.
+    private let renderer: CIContextRenderer
 
     // MARK: - Initialization
 
@@ -42,9 +37,7 @@ public final class CIContext: @unchecked Sendable {
         self._options = [:]
         self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         self._workingFormat = .RGBAf
-        #if arch(wasm32)
-        startGPUInitialization()
-        #endif
+        self.renderer = Self.createRenderer(options: nil)
     }
 
     /// Initializes a context without a specific rendering destination, using the specified options.
@@ -56,9 +49,7 @@ public final class CIContext: @unchecked Sendable {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
         self._workingFormat = options?[.workingFormat] as? CIFormat ?? .RGBAf
-        #if arch(wasm32)
-        startGPUInitialization()
-        #endif
+        self.renderer = Self.createRenderer(options: options)
     }
 
     /// Creates a Core Image context from a Quartz context, using the specified options.
@@ -70,32 +61,23 @@ public final class CIContext: @unchecked Sendable {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
         self._workingFormat = options?[.workingFormat] as? CIFormat ?? .RGBAf
+        self.renderer = Self.createRenderer(options: options)
+    }
+
+    // MARK: - Renderer Factory
+
+    /// Creates the appropriate renderer for the current platform.
+    ///
+    /// This is called internally during initialization.
+    /// On WASM, `CIWebGPUContextRenderer` is created.
+    /// On other platforms, a stub renderer is used for testing.
+    private static func createRenderer(options: [CIContextOption: Any]?) -> CIContextRenderer {
         #if arch(wasm32)
-        startGPUInitialization()
+        return CIWebGPUContextRenderer(options: options)
+        #else
+        return CIStubContextRenderer(options: options)
         #endif
     }
-
-    #if arch(wasm32)
-    /// Starts GPU initialization in the background.
-    private func startGPUInitialization() {
-        _gpuInitTask = Task {
-            try await GPUContextManager.shared.getDevice()
-        }
-    }
-
-    /// Returns the GPU device, waiting for initialization if needed.
-    private func getGPUDevice() async throws -> GPUDevice {
-        if let device = _gpuDevice {
-            return device
-        }
-        if let task = _gpuInitTask {
-            _gpuDevice = try await task.value
-            return _gpuDevice!
-        }
-        _gpuDevice = try await GPUContextManager.shared.getDevice()
-        return _gpuDevice!
-    }
-    #endif
 
     // MARK: - Properties
 
@@ -145,8 +127,9 @@ public final class CIContext: @unchecked Sendable {
         let height = Int(fromRect.height)
         guard width > 0 && height > 0 else { return nil }
 
-        // For solid color images without filters
-        if let color = image._color, image._filters.isEmpty {
+        // For solid color images - check if it's a pure color or only has CICrop filters
+        // (cropping a solid color still produces a solid color)
+        if let color = image._color, isSolidColorImage(image) {
             return createSolidColorCGImage(
                 color: color,
                 width: width,
@@ -167,7 +150,16 @@ public final class CIContext: @unchecked Sendable {
         #endif
     }
 
-    #if arch(wasm32)
+    /// Checks if the image is effectively a solid color image.
+    /// A solid color image has a color set and either no filters or only CICrop filters.
+    private func isSolidColorImage(_ image: CIImage) -> Bool {
+        if image._filters.isEmpty {
+            return true
+        }
+        // Check if all filters are CICrop (cropping a solid color is still solid)
+        return image._filters.allSatisfy { $0.name == "CICrop" }
+    }
+
     // MARK: - Async Rendering API
 
     /// Asynchronously creates a Core Graphics image from a Core Image image.
@@ -183,255 +175,14 @@ public final class CIContext: @unchecked Sendable {
         format: CIFormat = .RGBA8,
         colorSpace: CGColorSpace? = nil
     ) async throws -> CGImage {
-        try await renderToCGImageAsync(
+        let result = try await renderer.render(
             image: image,
-            fromRect: fromRect,
+            to: fromRect,
             format: format,
             colorSpace: colorSpace ?? _workingColorSpace
         )
+        return result.cgImage
     }
-
-    // MARK: - Private Rendering Implementation
-
-    private func renderToCGImageAsync(
-        image: CIImage,
-        fromRect: CGRect,
-        format: CIFormat,
-        colorSpace: CGColorSpace?
-    ) async throws -> CGImage {
-        let device = try await getGPUDevice()
-        let queue = try await GPUContextManager.shared.getQueue()
-
-        let width = Int(fromRect.width)
-        let height = Int(fromRect.height)
-
-        // Handle solid color images
-        if let color = image._color, image._filters.isEmpty {
-            guard let cgImage = createSolidColorCGImage(
-                color: color,
-                width: width,
-                height: height,
-                colorSpace: colorSpace
-            ) else {
-                throw CIError.renderingFailed
-            }
-            return cgImage
-        }
-
-        // Handle direct CGImage source with no filters
-        if let cgImage = image.cgImage, image._filters.isEmpty {
-            return cgImage
-        }
-
-        // Build filter graph DAG to get source images
-        var builder = FilterGraphBuilder()
-        let filterGraph = builder.build(from: image)
-
-        // Compile and execute filter graph
-        let compiledGraph = try await FilterGraphCompiler.shared.compile(
-            image: image,
-            outputRect: fromRect,
-            device: device
-        )
-
-        // Upload all source textures
-        try await uploadSourceTextures(
-            filterGraph: filterGraph,
-            compiledGraph: compiledGraph,
-            rect: fromRect,
-            device: device,
-            queue: queue
-        )
-
-        // Execute filter chain on GPU
-        try await executeFilterGraph(
-            graph: compiledGraph,
-            device: device,
-            queue: queue
-        )
-
-        // Read back result from GPU
-        let pixelData = try await readbackTexture(
-            texture: compiledGraph.textures[compiledGraph.outputTextureIndex],
-            width: UInt32(width),
-            height: UInt32(height),
-            device: device,
-            queue: queue
-        )
-
-        // Release textures back to pool
-        for texture in compiledGraph.textures {
-            await GPUTexturePool.shared.release(
-                texture,
-                width: compiledGraph.width,
-                height: compiledGraph.height,
-                format: .rgba8unorm
-            )
-        }
-
-        // Create CGImage from pixel data
-        guard let cgImage = createCGImageFromPixelData(
-            pixelData,
-            width: width,
-            height: height,
-            colorSpace: colorSpace
-        ) else {
-            throw CIError.renderingFailed
-        }
-
-        return cgImage
-    }
-
-    private func uploadSourceTextures(
-        filterGraph: FilterGraph,
-        compiledGraph: CompiledFilterGraph,
-        rect: CGRect,
-        device: GPUDevice,
-        queue: GPUQueue
-    ) async throws {
-        let width = Int(rect.width)
-        let height = Int(rect.height)
-
-        // Upload each source texture
-        for (sourceNodeId, textureIndex) in compiledGraph.sourceTextureIndices {
-            guard let sourceNode = filterGraph.nodes[sourceNodeId],
-                  let sourceImage = sourceNode.sourceImage else {
-                continue
-            }
-
-            let texture = compiledGraph.textures[textureIndex]
-
-            // Get pixel data from source image (may decode on-demand)
-            let pixelData = try await getPixelData(from: sourceImage, width: width, height: height)
-
-            // Convert Data to JavaScript Uint8Array for WebGPU (optimized bulk transfer)
-            let jsData = JSDataTransfer.toUint8Array(pixelData)
-
-            // Write to texture
-            queue.writeTexture(
-                destination: GPUImageCopyTexture(texture: texture),
-                data: jsData,
-                dataLayout: GPUImageDataLayout(
-                    bytesPerRow: UInt32(width * 4),
-                    rowsPerImage: UInt32(height)
-                ),
-                size: GPUExtent3D(
-                    width: UInt32(width),
-                    height: UInt32(height),
-                    depthOrArrayLayers: 1
-                )
-            )
-        }
-    }
-
-    private func getPixelData(from image: CIImage, width: Int, height: Int) async throws -> Data {
-        // First priority: decoded pixel data (already RGBA)
-        if let pixelData = image._pixelData, !pixelData.isEmpty {
-            return pixelData
-        }
-        // Second priority: CGImage source
-        if let cgImage = image.cgImage {
-            return extractPixelData(from: cgImage, width: width, height: height)
-        }
-        // Third priority: solid color
-        if let color = image._color {
-            return createSolidColorData(color: color, width: width, height: height)
-        }
-        // Fourth priority: decode from raw image data on-demand
-        if let rawData = image._data, !rawData.isEmpty {
-            let decoded = try await ImageDecoder.decode(rawData)
-            return decoded.pixelData
-        }
-        // Fallback: transparent pixels
-        return Data(count: width * height * 4)
-    }
-
-    private func executeFilterGraph(
-        graph: CompiledFilterGraph,
-        device: GPUDevice,
-        queue: GPUQueue
-    ) async throws {
-        guard !graph.nodes.isEmpty else { return }
-
-        let commandEncoder = device.createCommandEncoder()
-
-        for node in graph.nodes {
-            let computePass = commandEncoder.beginComputePass()
-            computePass.setPipeline(node.pipeline)
-            computePass.setBindGroup(0, bindGroup: node.bindGroup)
-
-            // Calculate workgroup counts
-            let workgroupSizeX: UInt32 = 16
-            let workgroupSizeY: UInt32 = 16
-            let workgroupCountX = (graph.width + workgroupSizeX - 1) / workgroupSizeX
-            let workgroupCountY = (graph.height + workgroupSizeY - 1) / workgroupSizeY
-
-            computePass.dispatchWorkgroups(
-                workgroupCountX: workgroupCountX,
-                workgroupCountY: workgroupCountY,
-                workgroupCountZ: 1
-            )
-            computePass.end()
-        }
-
-        let commandBuffer = commandEncoder.finish()
-        queue.submit([commandBuffer])
-    }
-
-    private func readbackTexture(
-        texture: GPUTexture,
-        width: UInt32,
-        height: UInt32,
-        device: GPUDevice,
-        queue: GPUQueue
-    ) async throws -> Data {
-        let bytesPerRow = width * 4
-        // Align to 256 bytes (WebGPU requirement for buffer copy)
-        let alignedBytesPerRow = (bytesPerRow + 255) & ~255
-        let bufferSize = UInt64(alignedBytesPerRow * height)
-
-        // Create staging buffer for readback
-        let stagingBuffer = device.createBuffer(
-            descriptor: GPUBufferDescriptor(
-                size: bufferSize,
-                usage: [.copyDst, .mapRead]
-            )
-        )
-
-        // Copy texture to buffer
-        let commandEncoder = device.createCommandEncoder()
-        commandEncoder.copyTextureToBuffer(
-            source: GPUImageCopyTexture(texture: texture),
-            destination: GPUImageCopyBuffer(
-                buffer: stagingBuffer,
-                bytesPerRow: alignedBytesPerRow,
-                rowsPerImage: height
-            ),
-            copySize: GPUExtent3D(width: width, height: height, depthOrArrayLayers: 1)
-        )
-
-        let commandBuffer = commandEncoder.finish()
-        queue.submit([commandBuffer])
-
-        // Map buffer and read data
-        try await stagingBuffer.mapAsync(mode: .read)
-        let mappedRangeJS = stagingBuffer.getMappedRange()
-
-        // Convert JSObject (ArrayBuffer) to Data with alignment handling (optimized)
-        let uint8Array = JSObject.global.Uint8Array.function!.new(mappedRangeJS)
-        let pixelData = JSDataTransfer.toDataWithAlignment(
-            uint8Array,
-            width: Int(width),
-            height: Int(height),
-            alignedBytesPerRow: Int(alignedBytesPerRow),
-            bytesPerPixel: 4
-        )
-
-        stagingBuffer.unmap()
-
-        return pixelData
-    }
-    #endif
 
     // MARK: - Helper Methods
 
@@ -553,33 +304,24 @@ public final class CIContext: @unchecked Sendable {
 
     /// Returns the maximum size allowed for any image rendered into the context.
     public func inputImageMaximumSize() -> CGSize {
-        CGSize(width: 16384, height: 16384)
+        renderer.maximumInputSize
     }
 
     /// Returns the maximum size allowed for any image created by the context.
     public func outputImageMaximumSize() -> CGSize {
-        CGSize(width: 16384, height: 16384)
+        renderer.maximumOutputSize
     }
 
     // MARK: - Managing Resources
 
     /// Frees any cached data, such as temporary images, associated with the context and runs the garbage collector.
     public func clearCaches() {
-        #if arch(wasm32)
-        Task {
-            await GPUTexturePool.shared.clear()
-            await GPUPipelineCache.shared.clear()
-        }
-        #endif
+        renderer.clearCaches()
     }
 
     /// Runs the garbage collector to reclaim any resources that the context no longer requires.
     public func reclaimResources() {
-        #if arch(wasm32)
-        Task {
-            await GPUTexturePool.shared.clear()
-        }
-        #endif
+        renderer.reclaimResources()
     }
 
     /// Returns the number of GPUs not currently driving a display.
@@ -938,15 +680,4 @@ public enum CIError: Error {
     case renderingFailed
     case invalidArgument
     case outOfMemory
-}
-
-// MARK: - UncheckedSendableBox
-
-/// A box that wraps a value and is marked as Sendable without compiler checks.
-/// Used for bridging synchronous APIs with async code where safety is manually verified.
-/// This is necessary for Swift 6 strict concurrency when using semaphores
-/// to block on async results from synchronous methods.
-internal final class UncheckedSendableBox<T>: @unchecked Sendable {
-    var value: T
-    init(_ value: T) { self.value = value }
 }

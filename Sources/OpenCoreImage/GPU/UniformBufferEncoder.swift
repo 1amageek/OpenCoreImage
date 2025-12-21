@@ -5,7 +5,6 @@
 //  Encodes filter parameters into GPU uniform buffer data.
 //
 
-#if arch(wasm32)
 import Foundation
 
 /// Encodes filter parameters into GPU-compatible uniform buffer binary data.
@@ -2044,4 +2043,3 @@ internal struct UniformBufferEncoder {
         return nil
     }
 }
-#endif

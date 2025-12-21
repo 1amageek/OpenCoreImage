@@ -73,6 +73,145 @@ public class CIImage: NSObjectProtocol, Sendable, Hashable {
 
 **Important**: Always refer to Apple's official CoreImage documentation to ensure API signatures match exactly.
 
+### Renderer Delegate Pattern
+
+Following the same pattern as OpenCoreGraphics, OpenCoreImage uses a **Renderer Delegate pattern** to separate rendering logic from public API. This enables:
+
+1. **Separation of concerns**: `CIContext` handles public API, renderer handles GPU operations
+2. **Platform abstraction**: Different platforms can have different renderer implementations
+3. **Testability**: Renderer can be tested independently
+
+#### Key Design Principles
+
+- **Internal, not external**: The renderer is created internally by `CIContext`, not injected from outside
+- **Strong reference, non-optional**: `CIContext` owns the renderer with a strong, non-optional reference
+- **Compile-time selection**: The appropriate renderer is selected via `#if arch(wasm32)` at compile time
+- **User transparency**: Users never interact with or know about the renderer
+
+#### Component Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CIContext                                       │
+│                          (Public Interface)                                  │
+│                                                                             │
+│  - Public API (createCGImage, render, etc.)                                 │
+│  - Options/settings management                                              │
+│  - Delegates all GPU work to renderer                                       │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │  private let renderer: CIContextRenderer  // Strong, non-optional     │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ delegates to (internal)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   CIContextRenderer (Internal Protocol)                      │
+│                                                                             │
+│  internal protocol CIContextRenderer: AnyObject, Sendable {                 │
+│      func render(image:to:format:colorSpace:) async throws -> CIRenderResult│
+│      func clearCaches()                                                     │
+│      func reclaimResources()                                                │
+│      var maximumInputSize: CGSize { get }                                   │
+│      var maximumOutputSize: CGSize { get }                                  │
+│  }                                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ▲
+                                      │ conforms to
+                                      │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      CIWebGPUContextRenderer                                 │
+│                     (WASM/WebGPU Implementation)                             │
+│                                                                             │
+│  - GPUDevice, GPUQueue management                                           │
+│  - Filter graph compilation and execution                                   │
+│  - Texture and pipeline caching                                             │
+│  - WGSL shader management                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Internal Renderer Selection
+
+```swift
+public final class CIContext {
+
+    private let renderer: CIContextRenderer
+
+    public init(options: [CIContextOption: Any]? = nil) {
+        self.renderer = Self.createRenderer(options: options)
+        // ...
+    }
+
+    private static func createRenderer(options: [CIContextOption: Any]?) -> CIContextRenderer {
+        #if arch(wasm32)
+        return CIWebGPUContextRenderer(options: options)
+        #else
+        // OpenCoreImage is WASM-only
+        // Native platforms use Apple's CoreImage directly
+        fatalError("OpenCoreImage is only available on WASM. Use Apple's CoreImage on native platforms.")
+        #endif
+    }
+}
+```
+
+#### Rendering Pipeline Flow
+
+```
+CIContext.createCGImageAsync(image, from: rect)
+    │
+    └──▶ renderer.render(image: image, to: rect, ...)
+              │
+              ├──▶ 1. FilterGraphBuilder.build(from: image)
+              │         └─▶ FilterGraph (DAG of filter nodes)
+              │
+              ├──▶ 2. FilterGraphCompiler.compile(graph, rect)
+              │         ├─▶ texturePool.acquire(...)
+              │         ├─▶ pipelineCache.getPipeline(...)
+              │         └─▶ CompiledFilterGraph
+              │
+              ├──▶ 3. uploadSourceTextures(...)
+              │         └─▶ queue.writeTexture(...)
+              │
+              ├──▶ 4. executeFilterGraph(...)
+              │         └─▶ queue.submit([commandBuffer])
+              │
+              └──▶ 5. readbackTexture(...)
+                        └─▶ CIRenderResult(pixelData, cgImage)
+```
+
+#### File Structure
+
+```
+Sources/OpenCoreImage/
+│
+├── CIContext.swift                    # Public API, owns renderer
+├── CIImage.swift                      # Filter graph representation
+├── CIFilter.swift                     # Filter base class
+│
+├── Rendering/
+│   ├── CIContextRenderer.swift        # Internal protocol definition
+│   ├── CIRenderResult.swift           # Render result struct
+│   │
+│   └── WebGPU/                        # WebGPU implementation
+│       ├── CIWebGPUContextRenderer.swift
+│       ├── FilterGraphCompiler.swift
+│       ├── GPUTexturePool.swift
+│       ├── GPUPipelineCache.swift
+│       └── WGSLShaderRegistry.swift
+│
+└── Filters/
+    └── ...
+```
+
+#### Responsibility Separation
+
+| Component | Responsibilities | Does NOT Know About |
+|-----------|-----------------|---------------------|
+| `CIContext` | Public API, options, orchestration | GPU APIs, shaders, textures |
+| `CIContextRenderer` | Rendering interface definition | Specific GPU implementation |
+| `CIWebGPUContextRenderer` | WebGPU rendering, resource management | Public API details |
+
 ## Types to Implement
 
 ### Essentials
