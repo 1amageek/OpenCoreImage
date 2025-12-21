@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import OpenCoreGraphics
+
 
 /// A GPU-based image-processing routine used to create custom Core Image filters.
 ///

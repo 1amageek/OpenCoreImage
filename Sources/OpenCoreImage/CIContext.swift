@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// The Core Image context class provides an evaluation context for Core Image processing.
 ///
@@ -221,7 +222,7 @@ public final class CIContext: @unchecked Sendable {
                 height: height,
                 bitsPerComponent: 8,
                 bytesPerRow: bytesPerRow,
-                space: CGColorSpaceCreateDeviceRGB(),
+                space: .deviceRGB,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
             ) else { return }
 
@@ -237,19 +238,11 @@ public final class CIContext: @unchecked Sendable {
         height: Int,
         colorSpace: CGColorSpace?
     ) -> CGImage? {
-        let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let cs = colorSpace ?? .deviceRGB
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         let bytesPerRow = width * 4
 
-        #if canImport(CoreGraphics)
-        // On native platforms, CGDataProvider expects CFData (toll-free bridged with Data)
-        guard let dataProvider = CGDataProvider(data: data as CFData) else {
-            return nil
-        }
-        #else
-        // On WASM, use OpenCoreGraphics which accepts Data directly
         let dataProvider = CGDataProvider(data: data)
-        #endif
 
         return CGImage(
             width: width,

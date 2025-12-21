@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// The Core Image class that defines a color object.
 ///
@@ -23,7 +24,7 @@ public final class CIColor: @unchecked Sendable {
 
     /// Create a Core Image color object with a Core Graphics color object.
     public init(cgColor: CGColor) {
-        self._colorSpace = cgColor.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        self._colorSpace = cgColor.colorSpace ?? .deviceRGB
         if let components = cgColor.components {
             var array = ContiguousArray<CGFloat>()
             for i in 0..<cgColor.numberOfComponents {
@@ -44,7 +45,7 @@ public final class CIColor: @unchecked Sendable {
     /// Initialize a Core Image color object in the sRGB color space with the specified
     /// red, green, blue, and alpha component values.
     public convenience init(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? .deviceRGB
         self.init(red: red, green: green, blue: blue, alpha: alpha, colorSpace: colorSpace)!
     }
 

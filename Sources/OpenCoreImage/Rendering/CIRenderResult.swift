@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// Render result from CIContextRenderer.
 ///

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// An object that manages feedback-based image processing for tasks such as
 /// painting or fluid simulation.

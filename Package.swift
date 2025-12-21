@@ -18,7 +18,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/1amageek/OpenCoreGraphics.git", branch: "main"),
+        .package(path: "../OpenCoreGraphics"),
         .package(url: "https://github.com/1amageek/swift-webgpu", branch: "main"),
     ],
     targets: [

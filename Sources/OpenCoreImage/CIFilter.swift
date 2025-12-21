@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// An image processor that produces an image by manipulating one or more input images
 /// or by generating new image data.

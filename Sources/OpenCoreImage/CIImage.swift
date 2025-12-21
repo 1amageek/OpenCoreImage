@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import OpenCoreGraphics
+
 
 /// A representation of an image to be processed or produced by Core Image filters.
 ///

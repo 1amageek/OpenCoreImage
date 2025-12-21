@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// Shared image processing utilities for detection algorithms.
 ///

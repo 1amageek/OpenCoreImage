@@ -6,8 +6,11 @@
 //  Used for testing and development on native platforms.
 //
 
-#if !arch(wasm32)
+
 import Foundation
+import OpenCoreGraphics
+
+#if !arch(wasm32)
 
 /// Stub implementation of `CIContextRenderer` for non-WASM platforms.
 ///
@@ -105,7 +108,7 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
                 height: height,
                 bitsPerComponent: 8,
                 bytesPerRow: bytesPerRow,
-                space: CGColorSpaceCreateDeviceRGB(),
+                space: .deviceRGB,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
             ) else { return }
 
@@ -121,17 +124,11 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
         height: Int,
         colorSpace: CGColorSpace?
     ) -> CGImage? {
-        let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let cs = colorSpace ?? .deviceRGB
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         let bytesPerRow = width * 4
 
-        #if canImport(CoreGraphics)
-        guard let dataProvider = CGDataProvider(data: data as CFData) else {
-            return nil
-        }
-        #else
         let dataProvider = CGDataProvider(data: data)
-        #endif
 
         return CGImage(
             width: width,

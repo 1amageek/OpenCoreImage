@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 // MARK: - Feature Type Constants
 

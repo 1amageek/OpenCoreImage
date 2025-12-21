@@ -5,8 +5,8 @@
 //  Pixel data formats for image input, output, and processing.
 //
 
-import OpenCoreGraphics
 import Foundation
+import OpenCoreGraphics
 
 /// Pixel data formats for image input, output, and processing.
 public struct CIFormat: RawRepresentable, Equatable, Hashable, Sendable {
