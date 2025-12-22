@@ -9,6 +9,7 @@
 import Foundation
 import JavaScriptKit
 import SwiftWebGPU
+import OpenCoreGraphics
 
 /// WebGPU-based implementation of `CIContextRenderer`.
 ///

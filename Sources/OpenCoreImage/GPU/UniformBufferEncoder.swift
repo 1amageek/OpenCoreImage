@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// Encodes filter parameters into GPU-compatible uniform buffer binary data.
 internal struct UniformBufferEncoder {

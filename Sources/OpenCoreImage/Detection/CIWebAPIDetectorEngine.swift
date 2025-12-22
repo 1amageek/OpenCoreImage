@@ -9,6 +9,7 @@
 
 import Foundation
 import JavaScriptKit
+import OpenCoreGraphics
 
 /// WASM-specific detector engine that uses browser APIs when available.
 ///
@@ -143,7 +144,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
 
             // Extract landmarks if available
             if let landmarks = face.landmarks.array {
-                extractFaceLandmarks(feature: feature, landmarks: landmarks, imageHeight: imageHeight)
+                extractFaceLandmarks(feature: feature, landmarks: Array(landmarks), imageHeight: imageHeight)
             }
 
             features.append(feature)
@@ -205,7 +206,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
             let detectorOptions = JSObject.global.Object.function!.new()
             let formats = JSObject.global.Array.function!.new()
             _ = formats.push!("qr_code")
-            detectorOptions.formats = formats
+            detectorOptions.formats = formats.jsValue
 
             let detector = try await JSObject.global.BarcodeDetector.function!.new(detectorOptions)
 
@@ -342,7 +343,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
             height
         )
 
-        return imageData
+        return imageData.jsValue
     }
 }
 

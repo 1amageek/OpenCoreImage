@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OpenCoreGraphics
 
 /// Represents a node in the filter graph DAG.
 internal struct FilterGraphNode: Identifiable {
