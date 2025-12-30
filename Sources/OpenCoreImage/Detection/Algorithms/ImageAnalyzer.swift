@@ -56,7 +56,10 @@ internal struct ImageAnalyzer: Sendable {
 
     // MARK: - Pixel Data Extraction
 
-    /// Extracts RGBA pixel data from a CIImage.
+    /// Extracts RGBA pixel data from a CIImage synchronously.
+    ///
+    /// - Important: This method only works for images without filter chains.
+    ///   For images with filters, use `getPixelDataAsync` instead.
     ///
     /// - Parameter image: The source image
     /// - Returns: Array of pixel data in RGBA format, or nil if extraction fails
@@ -82,8 +85,74 @@ internal struct ImageAnalyzer: Sendable {
             colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
         )
 
+        // Check if the data is all zeros (sync render failed, e.g., due to filter chain)
+        let hasNonZeroData = pixelData.contains { $0 != 0 }
+        guard hasNonZeroData else { return nil }
+
         return pixelData
     }
+
+    #if arch(wasm32)
+    /// Extracts RGBA pixel data from a CIImage asynchronously.
+    ///
+    /// This method supports images with filter chains by using GPU rendering.
+    ///
+    /// - Parameter image: The source image
+    /// - Returns: Tuple of (pixel data array, width, height), or nil if extraction fails
+    func getPixelDataAsync(from image: CIImage) async -> (data: [UInt8], width: Int, height: Int)? {
+        let ctx = context ?? CIContext()
+        let extent = image.extent
+
+        guard !extent.isInfinite else { return nil }
+
+        let width = Int(extent.width)
+        let height = Int(extent.height)
+
+        guard width > 0 && height > 0 else { return nil }
+
+        do {
+            // Use async rendering to handle filter chains
+            let cgImage = try await ctx.createCGImageAsync(image, from: extent, format: .RGBA8, colorSpace: nil)
+
+            // Extract pixel data from CGImage
+            guard let data = cgImage.dataProvider?.data,
+                  let pixelData = extractPixelDataFromCGImage(cgImage, width: width, height: height) else {
+                return nil
+            }
+
+            return (pixelData, width, height)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Extracts pixel data from a CGImage.
+    private func extractPixelDataFromCGImage(_ cgImage: CGImage, width: Int, height: Int) -> [UInt8]? {
+        let bytesPerPixel = 4
+        let bytesPerRow = width * bytesPerPixel
+        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+            return nil
+        }
+
+        guard let cgContext = CGContext(
+            data: &pixelData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        cgContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+
+        return pixelData
+    }
+    #endif
 
     // MARK: - Edge Detection
 

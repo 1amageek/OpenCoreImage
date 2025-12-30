@@ -31,6 +31,8 @@ public final class CIImage: @unchecked Sendable {
     internal let _url: URL?
     internal let _data: Data?
     internal let _pixelData: Data?  // Decoded RGBA pixel data for GPU upload
+    internal let _bytesPerRow: Int?  // Bytes per row for pixel data (for proper stride handling)
+    internal let _format: CIFormat?  // Pixel format for pixel data
     internal let _properties: [String: Any]
     internal let _transform: CGAffineTransform
     internal let _filters: [(name: String, parameters: [String: Any])]
@@ -70,6 +72,8 @@ public final class CIImage: @unchecked Sendable {
         url: URL? = nil,
         data: Data? = nil,
         pixelData: Data? = nil,
+        bytesPerRow: Int? = nil,
+        format: CIFormat? = nil,
         properties: [String: Any] = [:],
         transform: CGAffineTransform = .identity,
         filters: [(name: String, parameters: [String: Any])] = [],
@@ -85,6 +89,8 @@ public final class CIImage: @unchecked Sendable {
         self._url = url
         self._data = data
         self._pixelData = pixelData
+        self._bytesPerRow = bytesPerRow
+        self._format = format
         self._properties = properties
         self._transform = transform
         self._filters = filters
@@ -104,13 +110,52 @@ public final class CIImage: @unchecked Sendable {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         // Try to detect image dimensions from file headers
-        let extent = CIImage.detectImageExtent(from: data)
+        var extent = CIImage.detectImageExtent(from: data)
+
+        // Extract options
+        let colorSpace = options?[.colorSpace] as? CGColorSpace
+        let samplingMode: SamplingMode = (options?[.nearestSampling] as? Bool == true)
+            ? .nearest
+            : .linear
+        let shouldApplyOrientation = options?[.applyOrientationProperty] as? Bool ?? false
+        let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+        // Build properties dictionary (store all options for compatibility)
+        var properties: [String: Any] = [:]
+        options?.forEach { key, value in
+            properties[key.rawValue] = value
+        }
+
+        // Detect and apply EXIF orientation if requested
+        var filters: [(name: String, parameters: [String: Any])] = []
+        if shouldApplyOrientation, let orientation = CIImage.detectJPEGOrientation(from: data) {
+            // For orientations 5-8 (90° rotations), swap width and height
+            if orientation.rawValue >= 5 && orientation.rawValue <= 8 {
+                extent = CGRect(x: 0, y: 0, width: extent.height, height: extent.width)
+            }
+            // Add orientation transform as a filter
+            if orientation != .up {
+                filters.append((
+                    name: "CIAffineTransform",
+                    parameters: [kCIInputTransformKey: CIImage.orientationTransformForInit(
+                        orientation: orientation,
+                        width: extent.width,
+                        height: extent.height
+                    )]
+                ))
+            }
+        }
 
         self.init(
             extent: extent,
+            colorSpace: colorSpace,
             url: url,
             data: data,
-            properties: options?.reduce(into: [:]) { $0[$1.key.rawValue] = $1.value } ?? [:]
+            properties: properties,
+            filters: filters,
+            samplingMode: samplingMode,
+            contentHeadroom: headroom,
+            contentAverageLightLevel: averageLightLevel
         )
     }
 
@@ -122,11 +167,33 @@ public final class CIImage: @unchecked Sendable {
     /// Initializes an image object with a Quartz 2D image, using the specified options.
     public convenience init(cgImage: CGImage, options: [CIImageOption: Any]?) {
         let extent = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+
+        // Extract options
+        // If colorSpace option is provided, use it; otherwise use the CGImage's color space
+        let colorSpace = (options?[.colorSpace] as? CGColorSpace) ?? cgImage.colorSpace
+        let samplingMode: SamplingMode = (options?[.nearestSampling] as? Bool == true)
+            ? .nearest
+            : .linear
+        let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+        // Build properties dictionary (store all options for compatibility)
+        var properties: [String: Any] = [:]
+        options?.forEach { key, value in
+            properties[key.rawValue] = value
+        }
+
+        // Note: applyOrientationProperty is not applicable for CGImage sources
+        // since CGImage doesn't carry EXIF metadata in a parseable format.
+        // Use oriented(forExifOrientation:) method if orientation correction is needed.
+
         self.init(
             extent: extent,
-            colorSpace: cgImage.colorSpace,
+            colorSpace: colorSpace,
             cgImage: cgImage,
-            properties: options?.reduce(into: [:]) { $0[$1.key.rawValue] = $1.value } ?? [:]
+            properties: properties,
+            samplingMode: samplingMode,
+            contentHeadroom: headroom,
+            contentAverageLightLevel: averageLightLevel
         )
     }
 
@@ -138,16 +205,66 @@ public final class CIImage: @unchecked Sendable {
     /// Initializes an image object with the supplied image data, using the specified options.
     public convenience init?(data: Data, options: [CIImageOption: Any]?) {
         // Try to detect image dimensions from file headers
-        let extent = CIImage.detectImageExtent(from: data)
+        var extent = CIImage.detectImageExtent(from: data)
+
+        // Extract options
+        let colorSpace = options?[.colorSpace] as? CGColorSpace
+        let samplingMode: SamplingMode = (options?[.nearestSampling] as? Bool == true)
+            ? .nearest
+            : .linear
+        let shouldApplyOrientation = options?[.applyOrientationProperty] as? Bool ?? false
+        let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+        // Build properties dictionary (store all options for compatibility)
+        var properties: [String: Any] = [:]
+        options?.forEach { key, value in
+            properties[key.rawValue] = value
+        }
+
+        // Detect and apply EXIF orientation if requested
+        var filters: [(name: String, parameters: [String: Any])] = []
+        if shouldApplyOrientation, let orientation = CIImage.detectJPEGOrientation(from: data) {
+            // For orientations 5-8 (90° rotations), swap width and height
+            if orientation.rawValue >= 5 && orientation.rawValue <= 8 {
+                extent = CGRect(x: 0, y: 0, width: extent.height, height: extent.width)
+            }
+            // Add orientation transform as a filter
+            if orientation != .up {
+                filters.append((
+                    name: "CIAffineTransform",
+                    parameters: [kCIInputTransformKey: CIImage.orientationTransformForInit(
+                        orientation: orientation,
+                        width: extent.width,
+                        height: extent.height
+                    )]
+                ))
+            }
+        }
 
         self.init(
             extent: extent,
+            colorSpace: colorSpace,
             data: data,
-            properties: options?.reduce(into: [:]) { $0[$1.key.rawValue] = $1.value } ?? [:]
+            properties: properties,
+            filters: filters,
+            samplingMode: samplingMode,
+            contentHeadroom: headroom,
+            contentAverageLightLevel: averageLightLevel
         )
     }
 
     /// Initializes an image object with bitmap data.
+    ///
+    /// The bitmap data should be raw, uncompressed pixel data in the specified format.
+    /// This data is stored directly as pixel data (not encoded image data) and can be
+    /// used directly by the GPU renderer without decoding.
+    ///
+    /// - Parameters:
+    ///   - data: The raw pixel data.
+    ///   - bytesPerRow: The number of bytes per row in the data. This may include padding.
+    ///   - size: The size of the image in pixels.
+    ///   - format: The pixel format of the data (e.g., `.RGBA8`, `.RGBAf`).
+    ///   - colorSpace: The color space of the image data.
     public convenience init(
         bitmapData data: Data,
         bytesPerRow: Int,
@@ -156,10 +273,36 @@ public final class CIImage: @unchecked Sendable {
         colorSpace: CGColorSpace?
     ) {
         let extent = CGRect(origin: .zero, size: size)
+
+        // Normalize the pixel data if bytesPerRow doesn't match expected stride
+        let width = Int(size.width)
+        let height = Int(size.height)
+        let expectedBytesPerRow = width * format.bytesPerPixel
+
+        let normalizedData: Data
+        if bytesPerRow == expectedBytesPerRow {
+            // Data is already packed, use as-is
+            normalizedData = data
+        } else {
+            // Data has padding, need to strip it for proper GPU upload
+            var packed = Data(capacity: expectedBytesPerRow * height)
+            data.withUnsafeBytes { srcPtr in
+                guard let srcBase = srcPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+                for row in 0..<height {
+                    let srcOffset = row * bytesPerRow
+                    let rowData = Data(bytes: srcBase.advanced(by: srcOffset), count: expectedBytesPerRow)
+                    packed.append(rowData)
+                }
+            }
+            normalizedData = packed
+        }
+
         self.init(
             extent: extent,
             colorSpace: colorSpace,
-            data: data
+            pixelData: normalizedData,
+            bytesPerRow: expectedBytesPerRow,  // Store the normalized bytes per row
+            format: format  // Store the format for later use
         )
     }
 
@@ -169,6 +312,152 @@ public final class CIImage: @unchecked Sendable {
             extent: CGRect.infinite,
             color: color
         )
+    }
+
+    /// Initializes an image object from a CVPixelBuffer.
+    ///
+    /// - Parameter pixelBuffer: The CVPixelBuffer containing the image data.
+    ///
+    /// - Note: In WASM environments, this creates a CIImage with the pixel buffer's
+    ///         dimensions but without actual pixel data, as CVPixelBuffer is a stub type.
+    public convenience init(cvPixelBuffer pixelBuffer: CVPixelBuffer) {
+        self.init(cvPixelBuffer: pixelBuffer, options: nil)
+    }
+
+    /// Initializes an image object from a CVPixelBuffer with options.
+    ///
+    /// - Parameters:
+    ///   - pixelBuffer: The CVPixelBuffer containing the image data.
+    ///   - options: A dictionary of options for creating the image.
+    ///
+    /// - Note: In WASM environments, this creates a CIImage with the pixel buffer's
+    ///         dimensions but without actual pixel data, as CVPixelBuffer is a stub type.
+    public convenience init(cvPixelBuffer pixelBuffer: CVPixelBuffer, options: [CIImageOption: Any]?) {
+        let extent = CGRect(x: 0, y: 0, width: CGFloat(pixelBuffer.width), height: CGFloat(pixelBuffer.height))
+
+        // Extract options
+        let colorSpace = options?[.colorSpace] as? CGColorSpace
+        let samplingMode: SamplingMode = (options?[.nearestSampling] as? Bool == true)
+            ? .nearest
+            : .linear
+        let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+        // Build properties dictionary
+        var properties: [String: Any] = [:]
+        options?.forEach { key, value in
+            properties[key.rawValue] = value
+        }
+
+        self.init(
+            extent: extent,
+            colorSpace: colorSpace,
+            properties: properties,
+            samplingMode: samplingMode,
+            contentHeadroom: headroom,
+            contentAverageLightLevel: averageLightLevel
+        )
+    }
+
+    /// Initializes an image from depth data.
+    ///
+    /// - Parameter data: The AVDepthData containing the depth information.
+    ///
+    /// - Note: In WASM environments, this returns the depth data map if available,
+    ///         otherwise creates an empty image.
+    public convenience init(depthData data: AVDepthData) {
+        self.init(depthData: data, options: nil)
+    }
+
+    /// Initializes an image from depth data with options.
+    ///
+    /// - Parameters:
+    ///   - data: The AVDepthData containing the depth information.
+    ///   - options: A dictionary of options for creating the image.
+    ///
+    /// - Note: In WASM environments, this returns the depth data map if available,
+    ///         otherwise creates an empty image.
+    public convenience init(depthData data: AVDepthData, options: [CIImageOption: Any]?) {
+        if let depthMap = data.depthDataMap {
+            let colorSpace = (options?[.colorSpace] as? CGColorSpace) ?? depthMap.colorSpace
+            let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+            self.init(
+                extent: depthMap.extent,
+                colorSpace: colorSpace,
+                contentHeadroom: headroom,
+                contentAverageLightLevel: averageLightLevel
+            )
+        } else {
+            self.init(extent: .zero)
+        }
+    }
+
+    /// Initializes an image from a portrait effects matte.
+    ///
+    /// - Parameter matte: The AVPortraitEffectsMatte containing the matte information.
+    ///
+    /// - Note: In WASM environments, this returns the matte image if available,
+    ///         otherwise creates an empty image.
+    public convenience init(portraitEffectsMatte matte: AVPortraitEffectsMatte) {
+        self.init(portraitEffectsMatte: matte, options: nil)
+    }
+
+    /// Initializes an image from a portrait effects matte with options.
+    ///
+    /// - Parameters:
+    ///   - matte: The AVPortraitEffectsMatte containing the matte information.
+    ///   - options: A dictionary of options for creating the image.
+    ///
+    /// - Note: In WASM environments, this returns the matte image if available,
+    ///         otherwise creates an empty image.
+    public convenience init(portraitEffectsMatte matte: AVPortraitEffectsMatte, options: [CIImageOption: Any]?) {
+        if let matteImage = matte.mattingImage {
+            let colorSpace = (options?[.colorSpace] as? CGColorSpace) ?? matteImage.colorSpace
+            let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+            self.init(
+                extent: matteImage.extent,
+                colorSpace: colorSpace,
+                contentHeadroom: headroom,
+                contentAverageLightLevel: averageLightLevel
+            )
+        } else {
+            self.init(extent: .zero)
+        }
+    }
+
+    /// Initializes an image from a semantic segmentation matte.
+    ///
+    /// - Parameter matte: The AVSemanticSegmentationMatte containing the matte information.
+    ///
+    /// - Note: In WASM environments, this returns the matte image if available,
+    ///         otherwise creates an empty image.
+    public convenience init(semanticSegmentationMatte matte: AVSemanticSegmentationMatte) {
+        self.init(semanticSegmentationMatte: matte, options: nil)
+    }
+
+    /// Initializes an image from a semantic segmentation matte with options.
+    ///
+    /// - Parameters:
+    ///   - matte: The AVSemanticSegmentationMatte containing the matte information.
+    ///   - options: A dictionary of options for creating the image.
+    ///
+    /// - Note: In WASM environments, this returns the matte image if available,
+    ///         otherwise creates an empty image.
+    public convenience init(semanticSegmentationMatte matte: AVSemanticSegmentationMatte, options: [CIImageOption: Any]?) {
+        if let matteImage = matte.mattingImage {
+            let colorSpace = (options?[.colorSpace] as? CGColorSpace) ?? matteImage.colorSpace
+            let (headroom, averageLightLevel) = CIImage.extractHDROptions(from: options)
+
+            self.init(
+                extent: matteImage.extent,
+                colorSpace: colorSpace,
+                contentHeadroom: headroom,
+                contentAverageLightLevel: averageLightLevel
+            )
+        } else {
+            self.init(extent: .zero)
+        }
     }
 
     // MARK: - Async Factory Methods (WASM)
@@ -358,6 +647,126 @@ public final class CIImage: @unchecked Sendable {
         return (width, height)
     }
 
+    // MARK: - EXIF Orientation Detection
+
+    /// Detects EXIF orientation from JPEG image data.
+    ///
+    /// This function parses the JPEG APP1 segment to find EXIF metadata and extract
+    /// the orientation tag (0x0112).
+    ///
+    /// - Parameter data: The JPEG image data.
+    /// - Returns: The orientation value, or `nil` if not found or not a JPEG.
+    internal static func detectJPEGOrientation(from data: Data) -> CGImagePropertyOrientation? {
+        // Check JPEG signature (SOI marker: 0xFF 0xD8)
+        guard data.count >= 2, data[0] == 0xFF, data[1] == 0xD8 else { return nil }
+
+        var offset = 2
+        while offset < data.count - 4 {
+            guard data[offset] == 0xFF else {
+                offset += 1
+                continue
+            }
+
+            let marker = data[offset + 1]
+
+            // Skip padding bytes
+            if marker == 0xFF {
+                offset += 1
+                continue
+            }
+
+            // APP1 marker (EXIF)
+            if marker == 0xE1 {
+                guard offset + 4 < data.count else { return nil }
+                let length = Int(data[offset + 2]) << 8 | Int(data[offset + 3])
+                let exifStart = offset + 4
+
+                // Check "Exif\0\0" header (6 bytes)
+                guard exifStart + 6 <= data.count,
+                      data[exifStart] == 0x45,     // E
+                      data[exifStart + 1] == 0x78, // x
+                      data[exifStart + 2] == 0x69, // i
+                      data[exifStart + 3] == 0x66, // f
+                      data[exifStart + 4] == 0x00,
+                      data[exifStart + 5] == 0x00 else {
+                    offset += 2 + length
+                    continue
+                }
+
+                // Parse TIFF header and find orientation tag (0x0112)
+                return parseExifOrientation(data: data, tiffStart: exifStart + 6)
+            }
+
+            // Skip other markers
+            if marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7) {
+                offset += 2
+            } else {
+                guard offset + 3 < data.count else { return nil }
+                let length = Int(data[offset + 2]) << 8 | Int(data[offset + 3])
+                offset += 2 + length
+            }
+        }
+        return nil
+    }
+
+    /// Parses EXIF orientation from TIFF IFD structure.
+    ///
+    /// - Parameters:
+    ///   - data: The full image data.
+    ///   - tiffStart: The offset where the TIFF header begins.
+    /// - Returns: The orientation value, or `nil` if not found.
+    private static func parseExifOrientation(data: Data, tiffStart: Int) -> CGImagePropertyOrientation? {
+        guard tiffStart + 8 <= data.count else { return nil }
+
+        // Byte order: "II" = little endian (Intel), "MM" = big endian (Motorola)
+        let isLittleEndian = data[tiffStart] == 0x49 && data[tiffStart + 1] == 0x49
+
+        func readUInt16(at offset: Int) -> UInt16 {
+            guard offset + 1 < data.count else { return 0 }
+            let b0 = UInt16(data[offset])
+            let b1 = UInt16(data[offset + 1])
+            return isLittleEndian ? (b1 << 8 | b0) : (b0 << 8 | b1)
+        }
+
+        func readUInt32(at offset: Int) -> UInt32 {
+            guard offset + 3 < data.count else { return 0 }
+            let b0 = UInt32(data[offset])
+            let b1 = UInt32(data[offset + 1])
+            let b2 = UInt32(data[offset + 2])
+            let b3 = UInt32(data[offset + 3])
+            return isLittleEndian
+                ? (b3 << 24 | b2 << 16 | b1 << 8 | b0)
+                : (b0 << 24 | b1 << 16 | b2 << 8 | b3)
+        }
+
+        // Verify TIFF magic number (42)
+        let magic = readUInt16(at: tiffStart + 2)
+        guard magic == 42 else { return nil }
+
+        // IFD0 offset (usually 8)
+        let ifdOffset = Int(readUInt32(at: tiffStart + 4))
+        let ifdStart = tiffStart + ifdOffset
+        guard ifdStart + 2 <= data.count else { return nil }
+
+        let entryCount = Int(readUInt16(at: ifdStart))
+
+        // Search for orientation tag (0x0112)
+        for i in 0..<entryCount {
+            let entryOffset = ifdStart + 2 + i * 12
+            guard entryOffset + 12 <= data.count else { break }
+
+            let tagId = readUInt16(at: entryOffset)
+            if tagId == 0x0112 {  // Orientation tag
+                // Type should be SHORT (3) and count should be 1
+                let value = readUInt16(at: entryOffset + 8)
+                if value >= 1 && value <= 8 {
+                    return CGImagePropertyOrientation(rawValue: UInt32(value))
+                }
+            }
+        }
+        return nil
+    }
+
     // MARK: - Getting Image Information
 
     /// A rectangle that specifies the extent of the image.
@@ -400,6 +809,41 @@ public final class CIImage: @unchecked Sendable {
         _contentAverageLightLevel
     }
 
+    /// The CVPixelBuffer from which this image was created, if applicable.
+    ///
+    /// - Note: In WASM environments, this property always returns `nil`
+    ///         as CVPixelBuffer is not natively supported.
+    public var pixelBuffer: CVPixelBuffer? {
+        nil
+    }
+
+    /// The depth data associated with the image.
+    ///
+    /// - Note: In WASM environments, this property always returns `nil`
+    ///         as AVDepthData is not natively supported.
+    public var depthData: AVDepthData? {
+        nil
+    }
+
+    /// The portrait effects matte associated with the image.
+    ///
+    /// - Note: In WASM environments, this property always returns `nil`
+    ///         as AVPortraitEffectsMatte is not natively supported.
+    public var portraitEffectsMatte: AVPortraitEffectsMatte? {
+        nil
+    }
+
+    /// Returns the semantic segmentation matte of the specified type.
+    ///
+    /// - Parameter type: The type of semantic segmentation matte to retrieve.
+    /// - Returns: The semantic segmentation matte, or `nil` if not available.
+    ///
+    /// - Note: In WASM environments, this method always returns `nil`
+    ///         as AVSemanticSegmentationMatte is not natively supported.
+    public func semanticSegmentationMatte(ofType type: AVSemanticSegmentationMatteType) -> AVSemanticSegmentationMatte? {
+        nil
+    }
+
     // MARK: - Creating an Image by Modifying an Existing Image
 
     /// Returns a new image created by applying a filter to the original image with the specified name and parameters.
@@ -428,6 +872,59 @@ public final class CIImage: @unchecked Sendable {
         )
     }
 
+    /// Retrieves a numeric value from a dictionary, supporting CGFloat, Double, Float, and Int types.
+    ///
+    /// This helper function handles the type bridging issue where Swift's `as? CGFloat` fails
+    /// for boxed `Double` values passed through `[String: Any]` dictionaries.
+    ///
+    /// - Parameters:
+    ///   - dict: The dictionary to retrieve the value from.
+    ///   - key: The key to look up.
+    ///   - defaultValue: The default value to return if the key is not found or the value is not numeric.
+    /// - Returns: The numeric value as CGFloat, or the default value.
+    private static func numericValue(from dict: [String: Any], key: String, default defaultValue: CGFloat) -> CGFloat {
+        guard let value = dict[key] else { return defaultValue }
+
+        if let v = value as? CGFloat { return v }
+        if let v = value as? Double { return CGFloat(v) }
+        if let v = value as? Float { return CGFloat(v) }
+        if let v = value as? Int { return CGFloat(v) }
+        #if !arch(wasm32)
+        if let v = value as? NSNumber { return CGFloat(v.doubleValue) }
+        #endif
+
+        return defaultValue
+    }
+
+    /// Extracts HDR-related options from the options dictionary.
+    ///
+    /// This helper function extracts contentHeadroom and contentAverageLightLevel
+    /// from the options dictionary, handling various numeric types.
+    ///
+    /// - Parameter options: The options dictionary to extract values from.
+    /// - Returns: A tuple containing (headroom, averageLightLevel) with defaults of 1.0.
+    private static func extractHDROptions(from options: [CIImageOption: Any]?) -> (headroom: Float, averageLightLevel: Float) {
+        let headroom: Float = {
+            if let value = options?[.contentHeadroom] {
+                if let f = value as? Float { return f }
+                if let d = value as? Double { return Float(d) }
+                if let cg = value as? CGFloat { return Float(cg) }
+            }
+            return 1.0
+        }()
+
+        let averageLightLevel: Float = {
+            if let value = options?[.contentAverageLightLevel] {
+                if let f = value as? Float { return f }
+                if let d = value as? Double { return Float(d) }
+                if let cg = value as? CGFloat { return Float(cg) }
+            }
+            return 1.0
+        }()
+
+        return (headroom, averageLightLevel)
+    }
+
     /// Calculates the output extent for a filter based on its type and parameters.
     private static func calculateExtent(
         for filterName: String,
@@ -436,7 +933,7 @@ public final class CIImage: @unchecked Sendable {
     ) -> CGRect {
         // Handle blur filters - they expand the extent by the blur radius
         if filterName.contains("Blur") {
-            let radius = (parameters[kCIInputRadiusKey] as? CGFloat) ?? 10.0
+            let radius = numericValue(from: parameters, key: kCIInputRadiusKey, default: 10.0)
             return inputExtent.insetBy(dx: -radius * 3, dy: -radius * 3)
         }
 
@@ -469,8 +966,8 @@ public final class CIImage: @unchecked Sendable {
 
         // Handle lanczos scale - same extent
         if filterName == "CILanczosScaleTransform" {
-            let scale = (parameters[kCIInputScaleKey] as? CGFloat) ?? 1.0
-            let aspectRatio = (parameters[kCIInputAspectRatioKey] as? CGFloat) ?? 1.0
+            let scale = numericValue(from: parameters, key: kCIInputScaleKey, default: 1.0)
+            let aspectRatio = numericValue(from: parameters, key: kCIInputAspectRatioKey, default: 1.0)
             return CGRect(
                 x: inputExtent.origin.x,
                 y: inputExtent.origin.y,
@@ -674,27 +1171,43 @@ public final class CIImage: @unchecked Sendable {
 
     /// Returns the transformation needed to reorient the image to the specified orientation.
     public func orientationTransform(forExifOrientation orientation: Int32) -> CGAffineTransform {
-        let width = _extent.width
-        let height = _extent.height
+        CIImage.orientationTransformForInit(
+            orientation: CGImagePropertyOrientation(rawValue: UInt32(orientation)) ?? .up,
+            width: _extent.width,
+            height: _extent.height
+        )
+    }
 
+    /// Static helper to compute orientation transform for use during initialization.
+    ///
+    /// - Parameters:
+    ///   - orientation: The EXIF orientation value.
+    ///   - width: The image width (after any dimension swap for 90° rotations).
+    ///   - height: The image height (after any dimension swap for 90° rotations).
+    /// - Returns: The affine transform to apply.
+    internal static func orientationTransformForInit(
+        orientation: CGImagePropertyOrientation,
+        width: CGFloat,
+        height: CGFloat
+    ) -> CGAffineTransform {
         switch orientation {
-        case 1: // Up
+        case .up: // 1
             return .identity
-        case 2: // Up Mirrored
+        case .upMirrored: // 2
             return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -width, y: 0)
-        case 3: // Down
+        case .down: // 3
             return CGAffineTransform(translationX: width, y: height).rotated(by: .pi)
-        case 4: // Down Mirrored
+        case .downMirrored: // 4
             return CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -height)
-        case 5: // Left Mirrored
+        case .leftMirrored: // 5
             return CGAffineTransform(scaleX: -1, y: 1).rotated(by: -.pi / 2)
-        case 6: // Right
+        case .right: // 6
             return CGAffineTransform(translationX: height, y: 0).rotated(by: .pi / 2)
-        case 7: // Right Mirrored
+        case .rightMirrored: // 7
             return CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -height, y: 0).rotated(by: .pi / 2)
-        case 8: // Left
+        case .left: // 8
             return CGAffineTransform(translationX: 0, y: width).rotated(by: -.pi / 2)
-        default:
+        @unknown default:
             return .identity
         }
     }
@@ -923,6 +1436,27 @@ public struct CIImageOption: RawRepresentable, Equatable, Hashable, Sendable {
 
     /// A key for auxiliary HDR gain map.
     public static let auxiliaryHDRGainMap = CIImageOption(rawValue: "kCIImageAuxiliaryHDRGainMap")
+
+    /// A key for a boolean value that specifies whether to expand the image to HDR using the gain map.
+    public static let expandToHDR = CIImageOption(rawValue: "kCIImageExpandToHDR")
+
+    /// A key for a boolean value that specifies whether to cache the image immediately.
+    public static let cacheImmediately = CIImageOption(rawValue: "kCIImageCacheImmediately")
+
+    /// A key for a CGSize value that specifies the tile size for ImageProvider.
+    public static let providerTileSize = CIImageOption(rawValue: "kCIImageProviderTileSize")
+
+    /// A key for user info to pass to ImageProvider.
+    public static let providerUserInfo = CIImageOption(rawValue: "kCIImageProviderUserInfo")
+
+    /// A key for a float value that specifies the content headroom.
+    public static let contentHeadroom = CIImageOption(rawValue: "kCIImageContentHeadroom")
+
+    /// A key for a float value that specifies the content average light level.
+    public static let contentAverageLightLevel = CIImageOption(rawValue: "kCIImageContentAverageLightLevel")
+
+    /// A key for a boolean value that specifies whether to apply the clean aperture from CVPixelBuffer.
+    public static let applyCleanAperture = CIImageOption(rawValue: "kCIImageApplyCleanAperture")
 }
 
 // MARK: - CIImageAutoAdjustmentOption

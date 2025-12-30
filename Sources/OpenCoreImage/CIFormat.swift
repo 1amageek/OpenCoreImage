@@ -124,4 +124,78 @@ public struct CIFormat: RawRepresentable, Equatable, Hashable, Sendable {
 
     /// A 64-bit-per-pixel, full-width floating-point pixel format with 32-bit luminance and alpha components.
     public static let LAf = CIFormat(rawValue: 63)
+
+    // MARK: - Format Properties
+
+    /// The number of bytes per pixel for this format.
+    public var bytesPerPixel: Int {
+        switch self {
+        // RGBA formats
+        case .RGBA8, .BGRA8, .ARGB8, .ABGR8, .RGBX8:
+            return 4
+        case .RGBA16, .RGBX16, .RGBAh, .rgbXh:
+            return 8
+        case .RGBAf, .rgbXf:
+            return 16
+        case .RGB10:
+            return 4  // 10-bit packed
+
+        // Red channel formats
+        case .R8:
+            return 1
+        case .R16, .Rh:
+            return 2
+        case .Rf:
+            return 4
+
+        // Red-Green formats
+        case .RG8:
+            return 2
+        case .RG16, .RGh:
+            return 4
+        case .RGf:
+            return 8
+
+        // Alpha formats
+        case .A8:
+            return 1
+        case .A16, .Ah:
+            return 2
+        case .Af:
+            return 4
+
+        // Luminance formats
+        case .L8:
+            return 1
+        case .L16, .Lh:
+            return 2
+        case .Lf:
+            return 4
+
+        // Luminance-Alpha formats
+        case .LA8:
+            return 2
+        case .LA16, .LAh:
+            return 4
+        case .LAf:
+            return 8
+
+        default:
+            return 4  // Default to RGBA8
+        }
+    }
+
+    /// The number of components per pixel for this format.
+    public var componentCount: Int {
+        switch self {
+        case .RGBA8, .BGRA8, .ARGB8, .ABGR8, .RGBX8, .RGBA16, .RGBX16, .RGBAh, .rgbXh, .RGBAf, .rgbXf, .RGB10:
+            return 4
+        case .R8, .R16, .Rh, .Rf, .A8, .A16, .Ah, .Af, .L8, .L16, .Lh, .Lf:
+            return 1
+        case .RG8, .RG16, .RGh, .RGf, .LA8, .LA16, .LAh, .LAf:
+            return 2
+        default:
+            return 4
+        }
+    }
 }

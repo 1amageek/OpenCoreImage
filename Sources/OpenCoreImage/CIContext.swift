@@ -44,8 +44,9 @@ public final class CIContext: @unchecked Sendable {
     /// Initializes a context without a specific rendering destination, using the specified options.
     public init(options: [CIContextOption: Any]?) {
         self._options = options ?? [:]
-        if let colorSpace = options?[.workingColorSpace] {
-            self._workingColorSpace = (colorSpace as! CGColorSpace)
+        // Use safe cast to avoid crash on type mismatch
+        if let colorSpace = options?[.workingColorSpace] as? CGColorSpace {
+            self._workingColorSpace = colorSpace
         } else {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
@@ -56,8 +57,9 @@ public final class CIContext: @unchecked Sendable {
     /// Creates a Core Image context from a Quartz context, using the specified options.
     public init(cgContext: CGContext, options: [CIContextOption: Any]?) {
         self._options = options ?? [:]
-        if let colorSpace = options?[.workingColorSpace] {
-            self._workingColorSpace = (colorSpace as! CGColorSpace)
+        // Use safe cast to avoid crash on type mismatch
+        if let colorSpace = options?[.workingColorSpace] as? CGColorSpace {
+            self._workingColorSpace = colorSpace
         } else {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
@@ -119,9 +121,15 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace?,
         deferred: Bool
     ) -> CGImage? {
-        // If the image has a CGImage source and no filters, return it directly
+        // If the image has a CGImage source and no filters, crop and return it
         if let cgImage = image.cgImage, image._filters.isEmpty {
-            return cgImage
+            // Check if fromRect matches the full image size
+            let imageRect = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
+            if fromRect == imageRect {
+                return cgImage
+            }
+            // Crop to the requested region
+            return cgImage.cropping(to: fromRect)
         }
 
         let width = Int(fromRect.width)
@@ -273,6 +281,21 @@ public final class CIContext: @unchecked Sendable {
     }
 
     /// Renders to the given bitmap.
+    ///
+    /// - Parameters:
+    ///   - image: The CIImage to render.
+    ///   - data: Pointer to the destination bitmap buffer.
+    ///   - rowBytes: The number of bytes per row in the destination buffer.
+    ///   - bounds: The region of the image to render.
+    ///   - format: The pixel format of the destination buffer.
+    ///   - colorSpace: The color space of the destination buffer.
+    ///
+    /// - Note: On WASM, this method only supports synchronous rendering for:
+    ///   - Solid color images (without filters)
+    ///   - CGImage sources (without filters)
+    ///   - Images with pre-decoded pixel data (without additional filters)
+    ///   - Images from encoded data (PNG/JPEG) that can be decoded synchronously
+    ///   For filter chains, use `createCGImageAsync` instead.
     public func render(
         _ image: CIImage,
         toBitmap data: UnsafeMutableRawPointer,
@@ -281,8 +304,202 @@ public final class CIContext: @unchecked Sendable {
         format: CIFormat,
         colorSpace: CGColorSpace?
     ) {
-        // Placeholder implementation
-        // In a full implementation, this would render the image to the bitmap
+        let width = Int(bounds.width)
+        let height = Int(bounds.height)
+
+        guard width > 0 && height > 0 else { return }
+
+        // Check for filter chains - synchronous rendering does not support filters
+        let hasFilters = !image._filters.isEmpty
+
+        // Calculate bytes per pixel based on format
+        let bytesPerPixel = format.bytesPerPixel
+
+        // Get pixel data from the image
+        let pixelData: Data?
+
+        // Priority 1: Solid color image (without filters only)
+        if let color = image._color, isSolidColorImage(image), !hasFilters {
+            pixelData = createSolidColorData(color: color, width: width, height: height)
+        }
+        // Priority 2: Pre-decoded pixel data (from CIImage.decoded() or bitmapData init)
+        // Only use if no filters are applied, otherwise we'd be drawing unprocessed data
+        else if let decoded = image._pixelData, !decoded.isEmpty, !hasFilters {
+            let sourceExtent = image.extent
+            // Handle infinite extent
+            let sourceWidth = sourceExtent.isInfinite ? width : Int(sourceExtent.width)
+            let sourceHeight = sourceExtent.isInfinite ? height : Int(sourceExtent.height)
+
+            // Calculate sourceBytesPerRow based on format, not fixed at 4 bytes per pixel
+            let sourceFormat = image._format ?? .RGBA8
+            let sourceBytesPerRow = image._bytesPerRow ?? sourceWidth * sourceFormat.bytesPerPixel
+
+            pixelData = extractRegionFromPixelData(
+                decoded,
+                sourceWidth: sourceWidth,
+                sourceHeight: sourceHeight,
+                sourceBytesPerRow: sourceBytesPerRow,
+                sourceFormat: sourceFormat,
+                bounds: bounds,
+                targetFormat: format
+            )
+        }
+        // Priority 3: CGImage source without filters
+        else if let cgImage = image.cgImage, !hasFilters {
+            pixelData = extractPixelData(from: cgImage, width: width, height: height)
+        }
+        // Priority 4: Try to decode encoded data synchronously (without filters)
+        else if let encodedData = image._data, !encodedData.isEmpty, !hasFilters {
+            pixelData = decodeImageDataSync(encodedData, width: width, height: height, format: format)
+        }
+        // Priority 5: Cannot render synchronously (filter chains or unsupported sources)
+        else {
+            // For filter chains on WASM, synchronous rendering is not supported
+            // Return nil to indicate failure - the buffer remains unchanged
+            pixelData = nil
+        }
+
+        // Copy pixel data to destination buffer
+        if let sourceData = pixelData {
+            sourceData.withUnsafeBytes { srcPtr in
+                guard let srcBase = srcPtr.baseAddress else { return }
+                let destBase = data
+
+                // Handle row-by-row copy if rowBytes differs from source
+                let sourceRowBytes = width * bytesPerPixel
+                if rowBytes == sourceRowBytes {
+                    // Direct copy
+                    let copySize = min(sourceData.count, rowBytes * height)
+                    memcpy(destBase, srcBase, copySize)
+                } else {
+                    // Row-by-row copy with stride adjustment
+                    for row in 0..<height {
+                        let srcOffset = row * sourceRowBytes
+                        let destOffset = row * rowBytes
+                        let copyWidth = min(sourceRowBytes, rowBytes)
+
+                        guard srcOffset + copyWidth <= sourceData.count else { break }
+
+                        memcpy(
+                            destBase.advanced(by: destOffset),
+                            srcBase.advanced(by: srcOffset),
+                            copyWidth
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// Extracts a region from pixel data with format conversion.
+    private func extractRegionFromPixelData(
+        _ data: Data,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        sourceBytesPerRow: Int,
+        sourceFormat: CIFormat,
+        bounds: CGRect,
+        targetFormat: CIFormat
+    ) -> Data? {
+        let targetWidth = Int(bounds.width)
+        let targetHeight = Int(bounds.height)
+        let startX = Int(bounds.origin.x)
+        let startY = Int(bounds.origin.y)
+
+        // Validate bounds
+        guard startX >= 0, startY >= 0,
+              startX + targetWidth <= sourceWidth,
+              startY + targetHeight <= sourceHeight else {
+            return nil
+        }
+
+        let sourceBytesPerPixel = sourceFormat.bytesPerPixel
+        let targetBytesPerPixel = targetFormat.bytesPerPixel
+        let targetRowBytes = targetWidth * targetBytesPerPixel
+
+        var result = Data(count: targetRowBytes * targetHeight)
+
+        // If formats match, do a direct copy
+        if sourceFormat == targetFormat {
+            result.withUnsafeMutableBytes { destPtr in
+                data.withUnsafeBytes { srcPtr in
+                    guard let destBase = destPtr.baseAddress,
+                          let srcBase = srcPtr.baseAddress else { return }
+
+                    for row in 0..<targetHeight {
+                        let srcRow = startY + row
+                        let srcOffset = srcRow * sourceBytesPerRow + startX * sourceBytesPerPixel
+                        let destOffset = row * targetRowBytes
+
+                        memcpy(
+                            destBase.advanced(by: destOffset),
+                            srcBase.advanced(by: srcOffset),
+                            targetRowBytes
+                        )
+                    }
+                }
+            }
+        } else {
+            // Format conversion needed - implement basic RGBA8 handling
+            // For now, just copy and let the receiver handle format differences
+            result.withUnsafeMutableBytes { destPtr in
+                data.withUnsafeBytes { srcPtr in
+                    guard let destBase = destPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                          let srcBase = srcPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
+
+                    for row in 0..<targetHeight {
+                        let srcRow = startY + row
+                        for col in 0..<targetWidth {
+                            let srcCol = startX + col
+                            let srcOffset = srcRow * sourceBytesPerRow + srcCol * sourceBytesPerPixel
+                            let destOffset = row * targetRowBytes + col * targetBytesPerPixel
+
+                            // Copy available bytes, pad with 255 (alpha) if needed
+                            let copyBytes = min(sourceBytesPerPixel, targetBytesPerPixel)
+                            for i in 0..<copyBytes {
+                                destBase[destOffset + i] = srcBase[srcOffset + i]
+                            }
+                            // If target has more channels (e.g., RGB -> RGBA), set alpha to 255
+                            if targetBytesPerPixel > sourceBytesPerPixel {
+                                for i in sourceBytesPerPixel..<targetBytesPerPixel {
+                                    destBase[destOffset + i] = 255
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
+    /// Synchronously decodes image data (PNG/JPEG) to pixel data.
+    ///
+    /// - Important: Synchronous image decoding is not implemented in OpenCoreImage.
+    ///   This is because:
+    ///   - On WASM: Browser APIs for image decoding are async-only
+    ///   - OpenCoreImage is designed for WASM where CoreImage is unavailable
+    ///
+    /// - Note: For images created from encoded data (`CIImage(data:)` or
+    ///   `CIImage(contentsOf:)`), use async APIs like `createCGImageAsync`
+    ///   which properly handle decoding through WebGPU pipelines.
+    ///
+    /// - Returns: Always `nil`. Detection will fall back to pure Swift algorithms.
+    private func decodeImageDataSync(
+        _ data: Data,
+        width: Int,
+        height: Int,
+        format: CIFormat
+    ) -> Data? {
+        // Synchronous image decoding is not implemented.
+        // On WASM (the primary target), browser image decoding APIs are async-only.
+        // Users should:
+        // 1. Use async APIs (createCGImageAsync, detectFeaturesAsync) for encoded images
+        // 2. Pre-decode images to CGImage before creating CIImage for sync operations
+        // 3. Use CIImage(cgImage:) with pre-decoded images for detection
+        _ = (data, width, height, format)  // Suppress unused parameter warnings
+        return nil
     }
 
     // MARK: - Drawing Images

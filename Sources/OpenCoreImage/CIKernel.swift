@@ -9,6 +9,23 @@ import Foundation
 import OpenCoreGraphics
 
 
+// MARK: - CIKernelError
+
+/// Errors that can occur when working with CIKernel.
+public enum CIKernelError: Error, Sendable {
+    /// The kernel function name was not found in the Metal library.
+    case functionNotFound(String)
+
+    /// The Metal library data is invalid or corrupted.
+    case invalidMetalLibrary
+
+    /// The kernel source code is invalid.
+    case invalidKernelSource
+
+    /// A compilation error occurred.
+    case compilationFailed(String)
+}
+
 /// A GPU-based image-processing routine used to create custom Core Image filters.
 ///
 /// Use `CIKernel` and its subclasses to create custom image-processing effects
@@ -19,6 +36,7 @@ public class CIKernel {
 
     private let _name: String?
     private let _source: String?
+    private let _outputFormat: CIFormat?
 
     // MARK: - Initialization
 
@@ -26,12 +44,32 @@ public class CIKernel {
     public init?(functionName name: String, fromMetalLibraryData data: Data) {
         self._name = name
         self._source = nil
+        self._outputFormat = nil
+    }
+
+    /// Creates a kernel object from the specified kernel source code with an output pixel format.
+    ///
+    /// - Parameters:
+    ///   - name: The name of the kernel function in the Metal library.
+    ///   - data: The compiled Metal library data.
+    ///   - format: The pixel format for the output image.
+    /// - Throws: `CIKernelError` if the kernel cannot be created.
+    public init(functionName name: String, fromMetalLibraryData data: Data, outputPixelFormat format: CIFormat) throws {
+        // In WASM environment, Metal libraries are not directly usable.
+        // This is a stub implementation that stores the configuration.
+        guard !data.isEmpty else {
+            throw CIKernelError.invalidMetalLibrary
+        }
+        self._name = name
+        self._source = nil
+        self._outputFormat = format
     }
 
     /// Creates a kernel object from the specified kernel source code.
     public init?(source: String) {
         self._name = nil
         self._source = source
+        self._outputFormat = nil
     }
 
     // MARK: - Properties
@@ -39,6 +77,46 @@ public class CIKernel {
     /// The name of the kernel.
     public var name: String {
         _name ?? _source ?? "CIKernel"
+    }
+
+    /// The output pixel format of the kernel.
+    public var outputFormat: CIFormat? {
+        _outputFormat
+    }
+
+    // MARK: - Class Methods
+
+    /// Returns the names of all kernel functions in the Metal library data.
+    ///
+    /// - Parameter data: The compiled Metal library data.
+    /// - Returns: An array of kernel function names found in the library.
+    ///
+    /// - Note: In WASM environments, Metal libraries cannot be parsed directly.
+    ///         This method returns an empty array as Metal is not available.
+    public class func kernelNames(fromMetalLibraryData data: Data) -> [String] {
+        // Metal libraries are not available in WASM environment.
+        // Return empty array as we cannot parse Metal library format.
+        return []
+    }
+
+    /// Creates an array of kernel objects from Metal Shading Language source code.
+    ///
+    /// - Parameter source: The Metal Shading Language source code.
+    /// - Returns: An array of `CIKernel` objects for each kernel found in the source.
+    /// - Throws: `CIKernelError` if the source cannot be compiled.
+    ///
+    /// - Note: In WASM environments, Metal source cannot be compiled directly.
+    ///         This method provides stub functionality and will throw an error.
+    public class func kernels(withMetalString source: String) throws -> [CIKernel] {
+        // Metal source compilation is not available in WASM environment.
+        // In a full implementation, this would parse the MSL source and create kernels.
+        guard !source.isEmpty else {
+            throw CIKernelError.invalidKernelSource
+        }
+
+        // For WASM, we cannot compile Metal source directly.
+        // Return an empty array or a stub kernel.
+        throw CIKernelError.compilationFailed("Metal compilation is not available in WASM environment. Use WGSL shaders instead.")
     }
 
     // MARK: - Applying the Kernel

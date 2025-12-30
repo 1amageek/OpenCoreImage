@@ -72,6 +72,23 @@ internal struct FilterGraphBuilder {
     private var nextNodeId: Int = 0
     private var imageToNodeId: [ObjectIdentifier: Int] = [:]
 
+    // MARK: - Helper Functions
+
+    /// Retrieves a numeric value from a dictionary, supporting CGFloat, Double, Float, and Int types.
+    private func numericValue(from dict: [String: Any], key: String, default defaultValue: CGFloat) -> CGFloat {
+        guard let value = dict[key] else { return defaultValue }
+
+        if let v = value as? CGFloat { return v }
+        if let v = value as? Double { return CGFloat(v) }
+        if let v = value as? Float { return CGFloat(v) }
+        if let v = value as? Int { return CGFloat(v) }
+        #if !arch(wasm32)
+        if let v = value as? NSNumber { return CGFloat(v.doubleValue) }
+        #endif
+
+        return defaultValue
+    }
+
     // MARK: - Public Interface
 
     /// Builds a filter graph from a CIImage.
@@ -263,17 +280,19 @@ internal struct FilterGraphBuilder {
             return inputExtent
 
         case "CILanczosScaleTransform":
-            // Scale transform changes the output extent based on scale factor
-            if let scale = parameters["inputScale"] as? Double {
-                let aspectRatio = (parameters["inputAspectRatio"] as? Double) ?? 1.0
-                return CGRect(
-                    x: inputExtent.origin.x,
-                    y: inputExtent.origin.y,
-                    width: inputExtent.width * CGFloat(scale),
-                    height: inputExtent.height * CGFloat(scale / aspectRatio)
-                )
-            }
-            return inputExtent
+            // Scale transform changes the output extent based on scale factor.
+            // Apple's CILanczosScaleTransform:
+            // - inputScale: Scales both dimensions uniformly
+            // - inputAspectRatio: Changes the aspect ratio by scaling the width
+            // Formula: width = inputWidth * scale * aspectRatio, height = inputHeight * scale
+            let scale = numericValue(from: parameters, key: kCIInputScaleKey, default: 1.0)
+            let aspectRatio = numericValue(from: parameters, key: kCIInputAspectRatioKey, default: 1.0)
+            return CGRect(
+                x: inputExtent.origin.x,
+                y: inputExtent.origin.y,
+                width: inputExtent.width * scale * aspectRatio,
+                height: inputExtent.height * scale
+            )
 
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
              "CIStripesGenerator", "CIRandomGenerator",
