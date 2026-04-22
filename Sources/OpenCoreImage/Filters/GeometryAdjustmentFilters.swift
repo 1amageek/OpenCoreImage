@@ -5,7 +5,6 @@
 //  Geometry adjustment filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CIFourCoordinateGeometryFilter
 

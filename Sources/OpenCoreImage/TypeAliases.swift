@@ -7,9 +7,6 @@
 //  On WASM, use OpenCoreGraphics.
 //
 
-import Foundation
-import OpenCoreGraphics
-
 
 /// Image orientation values matching EXIF specification.
 /// Used for transforming images to correct orientation.
@@ -25,7 +22,10 @@ public enum CGImagePropertyOrientation: UInt32, Sendable {
 }
 
 
-#if arch(wasm32)
+// CoreGraphics C-style color space creation functions.
+// These are always available because OpenCoreImage uses OpenCoreGraphics
+// (pure Swift) on every platform — it never imports Apple's CoreGraphics,
+// so the C-style bridges must be provided here regardless of arch.
 
 /// Creates a device RGB color space.
 public func CGColorSpaceCreateDeviceRGB() -> CGColorSpace {
@@ -41,8 +41,6 @@ public func CGColorSpaceCreateDeviceGray() -> CGColorSpace {
 public func CGColorSpaceCreateDeviceCMYK() -> CGColorSpace {
     .deviceCMYK
 }
-
-#endif
 
 
 // MARK: - Apple Framework Type Stubs for WASM

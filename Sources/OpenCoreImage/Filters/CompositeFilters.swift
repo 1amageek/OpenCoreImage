@@ -5,7 +5,6 @@
 //  Composite operation filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CICompositeOperation
 

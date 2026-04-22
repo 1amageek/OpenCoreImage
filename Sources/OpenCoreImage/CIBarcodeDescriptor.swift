@@ -5,7 +5,6 @@
 //  Barcode descriptor classes for representing machine-readable codes.
 //
 
-import Foundation
 
 // MARK: - CIBarcodeDescriptor
 

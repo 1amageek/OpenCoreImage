@@ -5,8 +5,6 @@
 //  Keys for input and output parameters to filters.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - Output Keys
 

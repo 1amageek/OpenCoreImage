@@ -5,8 +5,6 @@
 //  Color effect filter protocols for Core Image.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIColorCrossPolynomial
 

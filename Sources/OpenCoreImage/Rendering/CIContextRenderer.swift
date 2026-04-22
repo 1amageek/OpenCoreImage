@@ -5,8 +5,6 @@
 //  Internal protocol for rendering backends that execute CIImage filter graphs.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// Internal protocol for rendering backends that execute CIImage filter graphs.
 ///

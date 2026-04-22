@@ -5,8 +5,6 @@
 //  Custom render destination classes for Core Image processing.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIRenderDestinationAlphaMode
 

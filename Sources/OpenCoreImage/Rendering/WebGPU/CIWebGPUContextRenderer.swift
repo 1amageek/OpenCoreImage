@@ -6,10 +6,8 @@
 //
 
 #if arch(wasm32)
-import Foundation
 import JavaScriptKit
 import SwiftWebGPU
-import OpenCoreGraphics
 
 /// WebGPU-based implementation of `CIContextRenderer`.
 ///
@@ -827,6 +825,10 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         let sourceBytesPerRow = sourceWidth * bytesPerPixel
         let copyBytesPerRow = copyWidth * bytesPerPixel
 
+        // Store count before closure to avoid overlapping access
+        let resultCount = result.count
+        let dataCount = data.count
+
         result.withUnsafeMutableBytes { destPtr in
             data.withUnsafeBytes { srcPtr in
                 guard let destBase = destPtr.baseAddress,
@@ -840,8 +842,8 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
                     let destOffset = destRow * targetBytesPerRow + destStartX * bytesPerPixel
 
                     // Bounds check
-                    guard srcOffset + copyBytesPerRow <= data.count,
-                          destOffset + copyBytesPerRow <= result.count else { continue }
+                    guard srcOffset + copyBytesPerRow <= dataCount,
+                          destOffset + copyBytesPerRow <= resultCount else { continue }
 
                     memcpy(
                         destBase.advanced(by: destOffset),

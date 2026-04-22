@@ -5,7 +5,6 @@
 //  Rectangle detection algorithm using Sobel edge detection and contour analysis.
 //
 
-import Foundation
 
 /// Rectangle detection algorithm using edge detection and contour approximation.
 ///

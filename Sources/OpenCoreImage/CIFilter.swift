@@ -6,8 +6,6 @@
 //  or by generating new image data.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// An image processor that produces an image by manipulating one or more input images
 /// or by generating new image data.
@@ -24,7 +22,10 @@ public class CIFilter {
     // MARK: - Private Storage
 
     private var _name: String
-    private var _inputValues: [String: Any] = [:]
+    /// Backing storage for input parameters. Internal so per-filter protocol conformances
+    /// (declared in sibling files via `extension CIFilter: CIGaussianBlur { ... }`) can
+    /// read and write the same dictionary that `setValue(_:forKey:)` uses.
+    internal var _inputValues: [String: Any] = [:]
     nonisolated(unsafe) private static var _registeredFilters: [String: FilterRegistration] = [:]
 
     private struct FilterRegistration {
@@ -76,7 +77,11 @@ public class CIFilter {
             return customFilter
         }
 
-        // Create standard filter
+        // Create standard built-in filter; unknown names return nil to match
+        // Apple's CoreImage behavior.
+        guard CIFilter.builtInFilterNames.contains(name) else {
+            return nil
+        }
         let filter = CIFilter(filterName: name)
         filter.setDefaults()
 
@@ -93,6 +98,9 @@ public class CIFilter {
 
     /// Creates a `CIFilter` object for a specific kind of filter.
     ///
+    /// Returns `nil` if `name` is neither a built-in CoreImage filter name nor a
+    /// previously registered custom filter.
+    ///
     /// - Warning: This initializer cannot return subclass instances. For custom filters
     ///   that need subclass behavior (overridden `outputImage`, custom properties, etc.),
     ///   use `CIFilter.create(name:)` instead.
@@ -103,6 +111,9 @@ public class CIFilter {
     }
 
     /// Creates a `CIFilter` object for a specific kind of filter and initializes the input values.
+    ///
+    /// Returns `nil` if `name` is neither a built-in CoreImage filter name nor a
+    /// previously registered custom filter.
     ///
     /// - Warning: This initializer cannot return subclass instances due to Swift's type system.
     ///   For custom filters that need subclass behavior (overridden `outputImage`, custom
@@ -122,10 +133,13 @@ public class CIFilter {
             } else {
                 return nil
             }
-        } else {
-            // Create standard filter
+        } else if CIFilter.builtInFilterNames.contains(name) {
+            // Create standard built-in filter.
             self._name = name
             setDefaults()
+        } else {
+            // Reject unknown names (Apple's CoreImage returns nil here as well).
+            return nil
         }
 
         // Apply any additional parameters
@@ -203,43 +217,35 @@ public class CIFilter {
                     metadata[kCIAttributeType] = kCIAttributeTypeRectangle
                 }
             case is CGAffineTransform:
+                // CoreGraphics transform (no NSValue in WASM). The Apple docs
+                // advertise `NSValue` here; we keep the string for wire
+                // compatibility but the actual stored value is a CGAffineTransform.
                 metadata[kCIAttributeClass] = "NSValue"
                 metadata[kCIAttributeType] = kCIAttributeTypeTransform
-            case let number as NSNumber:
+            case let bool as Bool:
+                // Bool must be matched before numeric types because Bool also
+                // satisfies `ExpressibleByIntegerLiteral`-derived bridges on
+                // Apple platforms; on WASM it's a plain struct but we keep
+                // the ordering explicit for parity.
                 metadata[kCIAttributeClass] = "NSNumber"
-                metadata[kCIAttributeDefault] = number
-                // Infer type from key name
-                if key.contains("Angle") {
-                    metadata[kCIAttributeType] = kCIAttributeTypeAngle
-                } else if key.contains("Radius") || key.contains("Distance") {
-                    metadata[kCIAttributeType] = kCIAttributeTypeDistance
-                } else if key.contains("Time") {
-                    metadata[kCIAttributeType] = kCIAttributeTypeTime
-                } else if key.contains("Count") {
-                    metadata[kCIAttributeType] = kCIAttributeTypeCount
-                } else {
-                    metadata[kCIAttributeType] = kCIAttributeTypeScalar
-                }
+                metadata[kCIAttributeDefault] = bool
+                metadata[kCIAttributeType] = kCIAttributeTypeBoolean
             case let double as Double:
                 metadata[kCIAttributeClass] = "NSNumber"
                 metadata[kCIAttributeDefault] = double
-                metadata[kCIAttributeType] = kCIAttributeTypeScalar
+                metadata[kCIAttributeType] = scalarKeyType(for: key)
             case let float as Float:
                 metadata[kCIAttributeClass] = "NSNumber"
                 metadata[kCIAttributeDefault] = float
-                metadata[kCIAttributeType] = kCIAttributeTypeScalar
+                metadata[kCIAttributeType] = scalarKeyType(for: key)
             case let cgFloat as CGFloat:
                 metadata[kCIAttributeClass] = "NSNumber"
                 metadata[kCIAttributeDefault] = cgFloat
-                metadata[kCIAttributeType] = kCIAttributeTypeScalar
+                metadata[kCIAttributeType] = scalarKeyType(for: key)
             case let int as Int:
                 metadata[kCIAttributeClass] = "NSNumber"
                 metadata[kCIAttributeDefault] = int
                 metadata[kCIAttributeType] = kCIAttributeTypeInteger
-            case let bool as Bool:
-                metadata[kCIAttributeClass] = "NSNumber"
-                metadata[kCIAttributeDefault] = bool
-                metadata[kCIAttributeType] = kCIAttributeTypeBoolean
             default:
                 metadata[kCIAttributeClass] = String(describing: type(of: value))
             }
@@ -253,11 +259,27 @@ public class CIFilter {
                 metadata[kCIAttributeType] = kCIAttributeTypeColor
             } else {
                 metadata[kCIAttributeClass] = "NSNumber"
-                metadata[kCIAttributeType] = kCIAttributeTypeScalar
+                metadata[kCIAttributeType] = scalarKeyType(for: key)
             }
         }
 
         return metadata
+    }
+
+    /// Infers a scalar-ish attribute type from the parameter key name (used when
+    /// the stored value is a plain Swift numeric rather than an `NSNumber`).
+    private static func scalarKeyType(for key: String) -> String {
+        if key.contains("Angle") {
+            return kCIAttributeTypeAngle
+        } else if key.contains("Radius") || key.contains("Distance") {
+            return kCIAttributeTypeDistance
+        } else if key.contains("Time") {
+            return kCIAttributeTypeTime
+        } else if key.contains("Count") {
+            return kCIAttributeTypeCount
+        } else {
+            return kCIAttributeTypeScalar
+        }
     }
 
     /// Returns the categories for a filter name.
@@ -386,10 +408,19 @@ public class CIFilter {
     // MARK: - Accessing Registered Filters
 
     /// Returns an array of all published filter names that match all the specified categories.
+    ///
+    /// Returns the union of built-in filter names and user-registered filter names.
+    /// Category filtering is coarse: a filter is considered to match a category if
+    /// every requested category is inferred to apply via `categoriesForFilter(_:)`.
     public class func filterNames(inCategories categories: [String]?) -> [String] {
-        // Return registered filter names
-        // In a full implementation, this would return built-in filters matching the categories
-        Array(_registeredFilters.keys)
+        let allNames = Array(builtInFilterNames) + Array(_registeredFilters.keys)
+        guard let required = categories, !required.isEmpty else {
+            return allNames
+        }
+        return allNames.filter { name in
+            let cats = Set(categoriesForFilter(name))
+            return required.allSatisfy { cats.contains($0) }
+        }
     }
 
     /// Returns an array of all published filter names in the specified category.
@@ -461,6 +492,104 @@ public class CIFilter {
         // In a full implementation, this would return documentation URLs
         nil
     }
+
+    // MARK: - Built-in Filter Registry
+
+    /// The set of CoreImage filter names recognized by `init?(name:)` / `create(name:)`.
+    ///
+    /// This list mirrors Apple's public CIFilter catalog as of iOS 17 / macOS 14 and
+    /// is kept in sync with the factory methods in `CIFilterFactoryMethods.swift`.
+    /// Filters not in this set (including deprecated or macOS-only imageunits) are
+    /// rejected by the initializers.
+    internal static let builtInFilterNames: Set<String> = [
+        // Blur
+        "CIBokehBlur", "CIBoxBlur", "CIDiscBlur", "CIGaussianBlur", "CIMaskedVariableBlur",
+        "CIMedianFilter", "CIMorphologyGradient", "CIMorphologyMaximum", "CIMorphologyMinimum",
+        "CIMorphologyRectangleMaximum", "CIMorphologyRectangleMinimum", "CIMotionBlur",
+        "CINoiseReduction", "CIZoomBlur",
+        // Color Adjustment
+        "CIColorAbsoluteDifference", "CIColorClamp", "CIColorControls", "CIColorMatrix",
+        "CIColorPolynomial", "CIColorThreshold", "CIColorThresholdOtsu", "CIDepthToDisparity",
+        "CIDisparityToDepth", "CIExposureAdjust", "CIGammaAdjust", "CIHueAdjust",
+        "CILinearToSRGBToneCurve", "CISRGBToneCurveToLinear", "CITemperatureAndTint",
+        "CIToneCurve", "CIVibrance", "CIWhitePointAdjust",
+        // Color Effect
+        "CIColorCrossPolynomial", "CIColorCube", "CIColorCubeWithColorSpace",
+        "CIColorCubesMixedWithMask", "CIColorCurves", "CIColorInvert", "CIColorMap",
+        "CIColorMonochrome", "CIColorPosterize", "CIConvertLabToRGB", "CIConvertRGBtoLab",
+        "CIDither", "CIDocumentEnhancer", "CIFalseColor", "CILabDeltaE", "CIMaskToAlpha",
+        "CIMaximumComponent", "CIMinimumComponent", "CIPaletteCentroid", "CIPalettize",
+        "CIPhotoEffectChrome", "CIPhotoEffectFade", "CIPhotoEffectInstant", "CIPhotoEffectMono",
+        "CIPhotoEffectNoir", "CIPhotoEffectProcess", "CIPhotoEffectTonal", "CIPhotoEffectTransfer",
+        "CISepiaTone", "CIThermal", "CIVignette", "CIVignetteEffect", "CIXRay",
+        // Composite / Blend
+        "CIAdditionCompositing", "CIColorBlendMode", "CIColorBurnBlendMode", "CIColorDodgeBlendMode",
+        "CIDarkenBlendMode", "CIDifferenceBlendMode", "CIDivideBlendMode", "CIExclusionBlendMode",
+        "CIHardLightBlendMode", "CIHueBlendMode", "CILightenBlendMode", "CILinearBurnBlendMode",
+        "CILinearDodgeBlendMode", "CILinearLightBlendMode", "CILuminosityBlendMode",
+        "CIMinimumCompositing", "CIMaximumCompositing", "CIMultiplyBlendMode",
+        "CIMultiplyCompositing", "CIOverlayBlendMode", "CIPinLightBlendMode",
+        "CISaturationBlendMode", "CIScreenBlendMode", "CISoftLightBlendMode",
+        "CISourceAtopCompositing", "CISourceInCompositing", "CISourceOutCompositing",
+        "CISourceOverCompositing", "CISubtractBlendMode", "CIVividLightBlendMode",
+        // Convolution
+        "CIConvolution3X3", "CIConvolution5X5", "CIConvolution7X7", "CIConvolution9Horizontal",
+        "CIConvolution9Vertical", "CIConvolutionRGB3X3", "CIConvolutionRGB5X5",
+        "CIConvolutionRGB7X7", "CIConvolutionRGB9Horizontal", "CIConvolutionRGB9Vertical",
+        // Distortion
+        "CIBumpDistortion", "CIBumpDistortionLinear", "CICircleSplashDistortion",
+        "CICircularWrap", "CIDisplacementDistortion", "CIDroste", "CIGlassDistortion",
+        "CIGlassLozenge", "CIHoleDistortion", "CILightTunnel", "CINinePartStretched",
+        "CINinePartTiled", "CIPinchDistortion", "CIStretchCrop", "CITorusLensDistortion",
+        "CITwirlDistortion", "CIVortexDistortion",
+        // Generator
+        "CIAttributedTextImageGenerator", "CIAztecCodeGenerator", "CIBarcodeGenerator",
+        "CIBlurredRectangleGenerator", "CICheckerboardGenerator", "CICode128BarcodeGenerator",
+        "CIConstantColorGenerator", "CILenticularHaloGenerator", "CIMeshGenerator",
+        "CIPDF417BarcodeGenerator", "CIQRCodeGenerator", "CIRandomGenerator",
+        "CIRoundedRectangleGenerator", "CIRoundedRectangleStrokeGenerator",
+        "CIStarShineGenerator", "CIStripesGenerator", "CISunbeamsGenerator",
+        "CITextImageGenerator",
+        // Geometry
+        "CIAffineTransform", "CIBicubicScaleTransform", "CICrop",
+        "CIEdgePreserveUpsampleFilter", "CIKeystoneCorrectionCombined",
+        "CIKeystoneCorrectionHorizontal", "CIKeystoneCorrectionVertical",
+        "CILanczosScaleTransform", "CIPerspectiveCorrection", "CIPerspectiveRotate",
+        "CIPerspectiveTransform", "CIPerspectiveTransformWithExtent", "CIStraightenFilter",
+        // Gradient
+        "CIGaussianGradient", "CIHueSaturationValueGradient", "CILinearGradient",
+        "CIRadialGradient", "CISmoothLinearGradient",
+        // Halftone
+        "CICircularScreen", "CICMYKHalftone", "CIDotScreen", "CIHatchedScreen", "CILineScreen",
+        // Reduction
+        "CIAreaAverage", "CIAreaHistogram", "CIAreaLogarithmicHistogram", "CIAreaMaximum",
+        "CIAreaMaximumAlpha", "CIAreaMinimum", "CIAreaMinimumAlpha", "CIAreaMinMax",
+        "CIAreaMinMaxRed", "CIColumnAverage", "CIHistogramDisplayFilter", "CIKMeans",
+        "CIRowAverage",
+        // Sharpen
+        "CISharpenLuminance", "CIUnsharpMask",
+        // Stylize
+        "CIBlendWithAlphaMask", "CIBlendWithBlueMask", "CIBlendWithMask", "CIBlendWithRedMask",
+        "CIBloom", "CICannyEdgeDetector", "CIComicEffect", "CICoreMLModelFilter",
+        "CICrystallize", "CIDepthOfField", "CIEdges", "CIEdgeWork", "CIGaborGradients",
+        "CIGloom", "CIHeightFieldFromMask", "CIHexagonalPixellate", "CIHighlightShadowAdjust",
+        "CILineOverlay", "CIMix", "CIPersonSegmentation", "CIPixellate", "CIPointillize",
+        "CISaliencyMapFilter", "CIShadedMaterial", "CISobelGradients", "CISpotColor",
+        "CISpotLight",
+        // Tile Effect
+        "CIAffineClamp", "CIAffineTile", "CIEightfoldReflectedTile", "CIFourfoldReflectedTile",
+        "CIFourfoldRotatedTile", "CIFourfoldTranslatedTile", "CIGlideReflectedTile",
+        "CIKaleidoscope", "CIOpTile", "CIParallelogramTile", "CIPerspectiveTile",
+        "CISixfoldReflectedTile", "CISixfoldRotatedTile", "CITriangleKaleidoscope",
+        "CITriangleTile", "CITwelvefoldReflectedTile",
+        // Transition
+        "CIAccordionFoldTransition", "CIBarsSwipeTransition", "CICopyMachineTransition",
+        "CIDisintegrateWithMaskTransition", "CIDissolveTransition", "CIFlashTransition",
+        "CIModTransition", "CIPageCurlTransition", "CIPageCurlWithShadowTransition",
+        "CIRippleTransition", "CISwipeTransition",
+        // RAW
+        "CIRAWFilter"
+    ]
 }
 
 // MARK: - Equatable
@@ -512,8 +641,20 @@ public protocol CIFilterConstructor {
 
 // MARK: - CIFilterProtocol
 
-/// The properties you use to configure a Core Image filter.
-public protocol CIFilterProtocol {
+/// Legacy marker protocol that all per-filter protocols (`CIGaussianBlur`, etc.)
+/// originally inherited from.
+///
+/// - Important: Apple's CoreImage bridges per-filter Objective-C protocols
+///   (`@protocol CIGaussianBlur <CIFilter>`) to Swift protocols that inherit
+///   from the `CIFilter` class itself, not from a separate `CIFilterProtocol`.
+///   To preserve API compatibility, per-filter protocols in OpenCoreImage
+///   inherit from `CIFilter` directly. This type is kept only so existing
+///   references that spell `CIFilterProtocol` still compile; it is a marker
+///   conformance supplied by `CIFilter` and carries no members of its own.
+public protocol CIFilterProtocol: AnyObject {
     /// The output image from the filter.
     var outputImage: CIImage? { get }
 }
+
+// CIFilter already declares `outputImage`; this extension makes the marker conformance explicit.
+extension CIFilter: CIFilterProtocol {}

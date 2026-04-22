@@ -5,7 +5,6 @@
 //  Sharpening filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CISharpenLuminance
 

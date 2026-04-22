@@ -7,9 +7,6 @@
 //
 
 
-import Foundation
-import OpenCoreGraphics
-
 #if !arch(wasm32)
 
 /// Stub implementation of `CIContextRenderer` for non-WASM platforms.
@@ -62,14 +59,20 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
             return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
         }
 
-        // Handle direct CGImage source with no filters
+        // Handle direct CGImage source with no filters (pure passthrough).
         if let cgImage = image.cgImage, image._filters.isEmpty {
-            let pixelData = extractPixelData(from: cgImage, width: width, height: height)
+            let pixelData = try extractPassthroughPixelData(
+                from: cgImage,
+                requestedWidth: width,
+                requestedHeight: height
+            )
             return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
         }
 
-        // For filter chains, this stub cannot perform GPU rendering
-        // Return a placeholder or throw an error
+        // Filter chains and transformed passthroughs require a real renderer.
+        // The native stub intentionally throws rather than returning a
+        // silently-zeroed buffer, so callers can distinguish "unsupported on
+        // native" from "rendered black".
         throw CIError.notImplemented
     }
 
@@ -97,25 +100,42 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
         return data
     }
 
-    private func extractPixelData(from cgImage: CGImage, width: Int, height: Int) -> Data {
-        let bytesPerRow = width * 4
-        var pixelData = Data(count: bytesPerRow * height)
-
-        pixelData.withUnsafeMutableBytes { ptr in
-            guard let context = CGContext(
-                data: ptr.baseAddress,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: bytesPerRow,
-                space: .deviceRGB,
-                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-            ) else { return }
-
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    /// Returns the raw RGBA8 bytes of `cgImage` when it can be returned verbatim
+    /// as a passthrough result of size `requestedWidth` × `requestedHeight`.
+    ///
+    /// The native stub has no renderer delegate, so it cannot rasterise a
+    /// `CGContext.draw` call. Instead it inspects the underlying `data`
+    /// provider and returns it only when all of the following hold:
+    ///  - the image has a pixel buffer attached (non-nil `data`)
+    ///  - the image's dimensions match the requested passthrough rect
+    ///  - the image is already in tightly-packed RGBA8 premultiplied-last
+    ///    layout (bitsPerPixel == 32, bytesPerRow == width * 4, alpha info
+    ///    `.premultipliedLast`, byte order default/big-endian).
+    ///
+    /// Any other combination throws `CIError.notImplemented` rather than
+    /// silently returning a zero-filled buffer — callers must be able to
+    /// distinguish "native stub cannot transcode" from "rendered black".
+    private func extractPassthroughPixelData(
+        from cgImage: CGImage,
+        requestedWidth: Int,
+        requestedHeight: Int
+    ) throws -> Data {
+        guard cgImage.width == requestedWidth, cgImage.height == requestedHeight else {
+            throw CIError.notImplemented
         }
-
-        return pixelData
+        guard let data = cgImage.data else {
+            throw CIError.notImplemented
+        }
+        let expectedBytesPerRow = requestedWidth * 4
+        guard cgImage.bitsPerPixel == 32,
+              cgImage.bitsPerComponent == 8,
+              cgImage.bytesPerRow == expectedBytesPerRow,
+              cgImage.alphaInfo == .premultipliedLast,
+              data.count == expectedBytesPerRow * requestedHeight
+        else {
+            throw CIError.notImplemented
+        }
+        return data
     }
 
     private func createCGImageFromPixelData(

@@ -5,7 +5,6 @@
 //  Image feature detection using the detector engine pattern.
 //
 
-import Foundation
 
 // MARK: - Detector Type Constants
 

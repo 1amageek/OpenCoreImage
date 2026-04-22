@@ -5,8 +5,6 @@
 //  Shared image processing utilities for detection algorithms.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// Shared image processing utilities for detection algorithms.
 ///
@@ -143,7 +141,7 @@ internal struct ImageAnalyzer: Sendable {
             bitsPerComponent: 8,
             bytesPerRow: bytesPerRow,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         ) else {
             return nil
         }

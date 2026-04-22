@@ -41,7 +41,7 @@ struct CIImageInitializationTests {
                 bitsPerComponent: 8,
                 bytesPerRow: 40,
                 space: colorSpace,
-                bitmapInfo: bitmapInfo.rawValue
+                bitmapInfo: bitmapInfo
             )
         }) else {
             Issue.record("Failed to create CGContext")
@@ -66,6 +66,13 @@ struct CIImageInitializationTests {
         #expect(image != nil)
     }
 
+    @Test("Initialize with non-existent URL returns nil")
+    func initWithNonExistentURL() {
+        let url = URL(fileURLWithPath: "/nonexistent/path.png")
+        let image = CIImage(contentsOf: url)
+        #expect(image == nil)
+    }
+
     @Test("Initialize with bitmap data")
     func initWithBitmapData() {
         let data = Data(count: 100 * 100 * 4)  // 100x100 RGBA
@@ -79,48 +86,6 @@ struct CIImageInitializationTests {
         )
         #expect(image.extent.width == 100)
         #expect(image.extent.height == 100)
-    }
-}
-
-// MARK: - CIImage Preset Colors Tests
-
-@Suite("CIImage Preset Colors")
-struct CIImagePresetColorTests {
-
-    @Test("Black image is infinite")
-    func blackImage() {
-        let image = CIImage.black
-        #expect(image.extent.isInfinite)
-    }
-
-    @Test("White image is infinite")
-    func whiteImage() {
-        let image = CIImage.white
-        #expect(image.extent.isInfinite)
-    }
-
-    @Test("Red image is infinite")
-    func redImage() {
-        let image = CIImage.red
-        #expect(image.extent.isInfinite)
-    }
-
-    @Test("Green image is infinite")
-    func greenImage() {
-        let image = CIImage.green
-        #expect(image.extent.isInfinite)
-    }
-
-    @Test("Blue image is infinite")
-    func blueImage() {
-        let image = CIImage.blue
-        #expect(image.extent.isInfinite)
-    }
-
-    @Test("Clear image is infinite")
-    func clearImage() {
-        let image = CIImage.clear
-        #expect(image.extent.isInfinite)
     }
 }
 

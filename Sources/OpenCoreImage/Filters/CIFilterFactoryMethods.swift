@@ -4,8 +4,35 @@
 //
 //  Factory methods for creating Core Image filters.
 //
+//  ---------------------------------------------------------------------------
+//  TODO: Protocol-conformance coverage
+//  ---------------------------------------------------------------------------
+//
+//  Each factory method below downcasts a `CIFilter` instance to
+//  `(any CIFilter & CISomeProtocol)`. That cast succeeds only when `CIFilter`
+//  itself conforms to the per-filter protocol. Conformance is declared in
+//  `CIFilterProtocolConformances.swift`, currently covering 15 filters:
+//
+//    CIGaussianBlur, CIBoxBlur, CIDiscBlur, CIMotionBlur, CIZoomBlur,
+//    CIMedian, CINoiseReduction, CIColorControls, CIHueAdjust,
+//    CISepiaTone, CIVignette, CIBloom, CIEdgeWork, CICrystallize, CIPixellate.
+//
+//  The remaining ~165 per-filter protocols defined under Filters/*.swift do
+//  NOT yet have matching `extension CIFilter: ...` conformances, so their
+//  factory methods below still return `nil` from the `as?` downcast. They are
+//  left in place (rather than deleted) to document the intended API shape and
+//  to make the work of adding conformances mechanical: add the extension in
+//  `CIFilterProtocolConformances.swift` and the corresponding factory will
+//  start returning a configured filter.
+//
+//  When adding a new conformance:
+//    1. Implement each property in terms of `_inputValues[...]` with the
+//       Apple-documented default value and the `input<Name>` key.
+//    2. Keep the factory-method name string in this file unchanged.
+//    3. Add the filter name to `CIFilter.builtInFilterNames` if not already
+//       listed there (new filters beyond the iOS 17 / macOS 14 catalog).
+//
 
-import Foundation
 
 // MARK: - Blur Filter Factory Methods
 

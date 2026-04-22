@@ -5,8 +5,6 @@
 //  Image unit classes for loading and managing filter plugins (macOS-specific).
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIPlugInRegistration
 

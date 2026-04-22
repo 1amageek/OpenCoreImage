@@ -5,7 +5,6 @@
 //  Pure Swift implementation of detector engine for all platforms.
 //
 
-import Foundation
 
 /// Pure Swift implementation of the detector engine.
 ///

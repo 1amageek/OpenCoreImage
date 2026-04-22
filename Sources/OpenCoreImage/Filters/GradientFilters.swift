@@ -5,8 +5,6 @@
 //  Gradient filter protocols for Core Image.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIGaussianGradient
 

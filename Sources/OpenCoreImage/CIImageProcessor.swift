@@ -5,8 +5,6 @@
 //  Custom image processor kernel and related protocols.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIImageProcessorInput
 

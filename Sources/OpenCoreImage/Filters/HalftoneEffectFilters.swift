@@ -5,7 +5,6 @@
 //  Halftone effect filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CICircularScreen
 

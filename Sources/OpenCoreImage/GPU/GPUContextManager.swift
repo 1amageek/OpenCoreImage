@@ -6,7 +6,6 @@
 //
 
 #if arch(wasm32)
-import Foundation
 import SwiftWebGPU
 
 /// Manages WebGPU device initialization and lifecycle as a singleton actor.

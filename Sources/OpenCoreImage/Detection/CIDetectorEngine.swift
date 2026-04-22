@@ -5,7 +5,6 @@
 //  Internal protocol for detector engine implementations.
 //
 
-import Foundation
 
 /// Internal protocol for detector engine implementations.
 ///

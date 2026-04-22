@@ -379,10 +379,12 @@ struct EdgeCaseTests {
         #expect(vector.count == 100)
     }
 
-    @Test("CIFilter with unknown name still creates")
+    @Test("CIFilter with unknown name returns nil")
     func filterWithUnknownName() {
+        // Matches Apple's CoreImage behavior: CIFilter(name:) returns nil for
+        // any name that is not a built-in filter or previously registered.
         let filter = CIFilter(name: "CIUnknownFilter12345")
-        #expect(filter != nil)
+        #expect(filter == nil)
     }
 
     @Test("Zero-size crop produces zero extent")

@@ -5,8 +5,6 @@
 //  Feature classes for image detection results.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - Feature Type Constants
 

@@ -5,7 +5,6 @@
 //  Blur filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CIBokehBlur
 

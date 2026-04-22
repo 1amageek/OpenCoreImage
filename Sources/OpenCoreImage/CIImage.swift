@@ -5,9 +5,6 @@
 //  A representation of an image to be processed or produced by Core Image filters.
 //
 
-import Foundation
-import OpenCoreGraphics
-
 
 /// A representation of an image to be processed or produced by Core Image filters.
 ///
@@ -107,7 +104,15 @@ public final class CIImage: @unchecked Sendable {
 
     /// Initializes an image object by reading an image from a URL, using the specified options.
     public convenience init?(contentsOf url: URL, options: [CIImageOption: Any]?) {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // Match Apple's behavior of returning nil for unreadable URLs, but
+            // surface the failure to stderr so silent regressions are visible.
+            print("CIImage(contentsOf:): failed to read \(url) - \(error)")
+            return nil
+        }
 
         // Try to detect image dimensions from file headers
         var extent = CIImage.detectImageExtent(from: data)
@@ -889,9 +894,6 @@ public final class CIImage: @unchecked Sendable {
         if let v = value as? Double { return CGFloat(v) }
         if let v = value as? Float { return CGFloat(v) }
         if let v = value as? Int { return CGFloat(v) }
-        #if !arch(wasm32)
-        if let v = value as? NSNumber { return CGFloat(v.doubleValue) }
-        #endif
 
         return defaultValue
     }
@@ -1309,37 +1311,6 @@ public final class CIImage: @unchecked Sendable {
         applyingFilter("CIGainMap", parameters: ["inputGainMap": gainMap, "inputHeadroom": headroom])
     }
 
-    // MARK: - Preset Color Images
-
-    /// A solid black image.
-    public static let black = CIImage(color: .black)
-
-    /// A solid blue image.
-    public static let blue = CIImage(color: .blue)
-
-    /// A transparent (clear) image.
-    public static let clear = CIImage(color: .clear)
-
-    /// A solid cyan image.
-    public static let cyan = CIImage(color: .cyan)
-
-    /// A solid gray image.
-    public static let gray = CIImage(color: .gray)
-
-    /// A solid green image.
-    public static let green = CIImage(color: .green)
-
-    /// A solid magenta image.
-    public static let magenta = CIImage(color: .magenta)
-
-    /// A solid red image.
-    public static let red = CIImage(color: .red)
-
-    /// A solid white image.
-    public static let white = CIImage(color: .white)
-
-    /// A solid yellow image.
-    public static let yellow = CIImage(color: .yellow)
 }
 
 // MARK: - Equatable

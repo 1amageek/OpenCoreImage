@@ -5,8 +5,6 @@
 //  DAG representation of filter graphs for multi-input filter support.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// Represents a node in the filter graph DAG.
 internal struct FilterGraphNode: Identifiable {

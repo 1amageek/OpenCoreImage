@@ -6,7 +6,6 @@
 //
 
 #if arch(wasm32)
-import Foundation
 import JavaScriptKit
 
 /// Utilities for efficient data transfer between Swift Data and JavaScript TypedArrays.

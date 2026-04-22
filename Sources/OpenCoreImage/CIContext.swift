@@ -5,8 +5,6 @@
 //  The Core Image context class provides an evaluation context for Core Image processing.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// The Core Image context class provides an evaluation context for Core Image processing.
 ///
@@ -147,16 +145,15 @@ public final class CIContext: @unchecked Sendable {
             )
         }
 
-        #if arch(wasm32)
-        // On WASM, synchronous rendering with filter chains is not supported
-        // because DispatchSemaphore is not available in single-threaded WASM.
-        // Use createCGImageAsync() for filter chain rendering instead.
-        // For images without filters, the early returns above will handle them.
+        // Synchronous rendering of filter chains is not supported.
+        //
+        // The renderer protocol (`CIContextRenderer.render(...)`) is async-only
+        // because WebGPU readback (the production target on WASM) is inherently
+        // asynchronous. Use `createCGImageAsync(...)` for images that contain a
+        // filter graph. The early returns above already cover the cases that
+        // *can* be served synchronously (solid color, cropped CGImage source).
+        print("CIContext.createCGImage: filter-chain rendering requires createCGImageAsync(_:from:)")
         return nil
-        #else
-        // Non-WASM: filter chain rendering not available
-        return nil
-        #endif
     }
 
     /// Checks if the image is effectively a solid color image.
@@ -352,10 +349,11 @@ public final class CIContext: @unchecked Sendable {
         else if let encodedData = image._data, !encodedData.isEmpty, !hasFilters {
             pixelData = decodeImageDataSync(encodedData, width: width, height: height, format: format)
         }
-        // Priority 5: Cannot render synchronously (filter chains or unsupported sources)
+        // Priority 5: Cannot render synchronously (filter chains or unsupported sources).
+        // WebGPU readback is inherently async, so a filter graph cannot be
+        // evaluated from a sync entrypoint. Surface this to the caller.
         else {
-            // For filter chains on WASM, synchronous rendering is not supported
-            // Return nil to indicate failure - the buffer remains unchanged
+            print("CIContext.render(toBitmap:...): synchronous rendering cannot evaluate filter chains; use createCGImageAsync / pngRepresentationAsync")
             pixelData = nil
         }
 

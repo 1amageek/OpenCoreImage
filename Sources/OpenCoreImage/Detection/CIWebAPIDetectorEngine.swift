@@ -7,9 +7,7 @@
 
 #if arch(wasm32)
 
-import Foundation
 import JavaScriptKit
-import OpenCoreGraphics
 
 /// WASM-specific detector engine that uses browser APIs when available.
 ///
@@ -376,7 +374,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
             bitsPerComponent: 8,
             bytesPerRow: bytesPerRow,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         ) else {
             return nil
         }

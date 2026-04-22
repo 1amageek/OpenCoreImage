@@ -6,7 +6,6 @@
 //
 
 #if arch(wasm32)
-import Foundation
 import JavaScriptKit
 
 /// Result of decoding an image.

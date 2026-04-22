@@ -6,6 +6,7 @@
 //
 
 import Testing
+import Foundation
 @testable import OpenCoreImage
 
 // MARK: - CIFilter Initialization Tests
@@ -434,5 +435,139 @@ struct CIFilterParameterTypesTests {
         filter.setValue(transform, forKey: kCIInputTransformKey)
         // Transform stored as Any
         #expect(filter.value(forKey: kCIInputTransformKey) != nil)
+    }
+}
+
+// MARK: - CIFilter Built-in Name Gating Tests
+
+@Suite("CIFilter Built-in Name Gating")
+struct CIFilterBuiltInNameGatingTests {
+
+    @Test("CIGaussianBlur is recognized as built-in")
+    func gaussianBlurRecognized() {
+        let filter = CIFilter(name: "CIGaussianBlur")
+        #expect(filter != nil)
+    }
+
+    @Test("CIColorControls is recognized as built-in")
+    func colorControlsRecognized() {
+        let filter = CIFilter(name: "CIColorControls")
+        #expect(filter != nil)
+    }
+
+    @Test("Non-existent filter name returns nil")
+    func nonExistentFilterReturnsNil() {
+        let filter = CIFilter(name: "CINonExistentFilterXYZ")
+        #expect(filter == nil)
+    }
+
+    @Test("Empty filter name returns nil")
+    func emptyFilterNameReturnsNil() {
+        let filter = CIFilter(name: "")
+        #expect(filter == nil)
+    }
+
+    @Test("filterNames(inCategory: nil) is non-empty and contains CIGaussianBlur")
+    func filterNamesInNilCategoryContainsGaussianBlur() {
+        let names = CIFilter.filterNames(inCategory: nil)
+        #expect(!names.isEmpty)
+        #expect(names.contains("CIGaussianBlur"))
+    }
+
+    @Test("filterNames(inCategories: nil) contains built-in names")
+    func filterNamesInCategoriesNilContainsBuiltIns() {
+        let names = CIFilter.filterNames(inCategories: nil)
+        #expect(names.contains("CIGaussianBlur"))
+        #expect(names.contains("CIColorControls"))
+    }
+}
+
+// MARK: - CIFilter Numeric Value Round-Trip Tests
+
+@Suite("CIFilter Numeric Value Round-Trip")
+struct CIFilterNumericRoundTripTests {
+
+    @Test("Int round-trips through KVC")
+    func intRoundTrip() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Int(5), forKey: kCIInputRadiusKey)
+        #expect(filter.value(forKey: kCIInputRadiusKey) as? Int == 5)
+    }
+
+    @Test("Float round-trips through KVC")
+    func floatRoundTrip() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Float(7.5), forKey: kCIInputRadiusKey)
+        #expect(filter.value(forKey: kCIInputRadiusKey) as? Float == 7.5)
+    }
+
+    @Test("Double round-trips through KVC")
+    func doubleRoundTrip() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Double(12.25), forKey: kCIInputRadiusKey)
+        #expect(filter.value(forKey: kCIInputRadiusKey) as? Double == 12.25)
+    }
+
+    @Test("CGFloat round-trips through KVC")
+    func cgFloatRoundTrip() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        let expected: CGFloat = 3.5
+        filter.setValue(expected, forKey: kCIInputRadiusKey)
+        #expect(filter.value(forKey: kCIInputRadiusKey) as? CGFloat == expected)
+    }
+
+    @Test("Attribute metadata labels Int as NSNumber class string")
+    func attributeMetadataIntNSNumberLabel() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Int(5), forKey: kCIInputRadiusKey)
+        let attrs = filter.attributes
+        let radiusMetadata = attrs[kCIInputRadiusKey] as? [String: Any]
+        #expect(radiusMetadata != nil)
+        #expect(radiusMetadata?[kCIAttributeClass] as? String == "NSNumber")
+    }
+
+    @Test("Attribute metadata labels Float as NSNumber class string")
+    func attributeMetadataFloatNSNumberLabel() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Float(7.5), forKey: kCIInputRadiusKey)
+        let attrs = filter.attributes
+        let radiusMetadata = attrs[kCIInputRadiusKey] as? [String: Any]
+        #expect(radiusMetadata?[kCIAttributeClass] as? String == "NSNumber")
+    }
+
+    @Test("Attribute metadata labels Double as NSNumber class string")
+    func attributeMetadataDoubleNSNumberLabel() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        filter.setValue(Double(12.25), forKey: kCIInputRadiusKey)
+        let attrs = filter.attributes
+        let radiusMetadata = attrs[kCIInputRadiusKey] as? [String: Any]
+        #expect(radiusMetadata?[kCIAttributeClass] as? String == "NSNumber")
+    }
+
+    @Test("Attribute metadata labels CGFloat as NSNumber class string")
+    func attributeMetadataCGFloatNSNumberLabel() {
+        let filter = CIFilter(name: "CIGaussianBlur")!
+        let value: CGFloat = 3.5
+        filter.setValue(value, forKey: kCIInputRadiusKey)
+        let attrs = filter.attributes
+        let radiusMetadata = attrs[kCIInputRadiusKey] as? [String: Any]
+        #expect(radiusMetadata?[kCIAttributeClass] as? String == "NSNumber")
+    }
+}
+
+// MARK: - CIRAWFilter URL Loading Tests
+
+@Suite("CIRAWFilter URL Loading")
+struct CIRAWFilterURLLoadingTests {
+
+    @Test("CIRAWFilter returns nil for non-existent URL")
+    func ciRawFilterNonExistentURLReturnsNil() {
+        // `CIRAWFilter(imageURL:)` is a failable initializer. When the file
+        // cannot be read, it must return nil so callers branch to a non-RAW
+        // fallback instead of receiving a filter that silently emits a
+        // placeholder image.
+        let url = URL(fileURLWithPath: "/nonexistent/path.cr2")
+        let filter = CIRAWFilter(imageURL: url)
+        #expect(filter == nil)
     }
 }

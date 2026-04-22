@@ -5,7 +5,6 @@
 //  Text detection algorithm using edge detection and morphological analysis.
 //
 
-import Foundation
 
 /// Text detection algorithm using edge detection and morphological operations.
 ///

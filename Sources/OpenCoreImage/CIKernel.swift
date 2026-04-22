@@ -5,9 +5,6 @@
 //  A GPU-based image-processing routine used to create custom Core Image filters.
 //
 
-import Foundation
-import OpenCoreGraphics
-
 
 // MARK: - CIKernelError
 
@@ -122,11 +119,19 @@ public class CIKernel {
     // MARK: - Applying the Kernel
 
     /// Creates a new image by applying the kernel's image-processing routine.
+    ///
+    /// - Warning: Custom-kernel evaluation is not implemented. The returned
+    ///   `CIImage` currently carries only `extent` metadata; no WGSL compute
+    ///   pass is dispatched. Downstream code must treat the result as an
+    ///   empty/placeholder image. Tracked for future work: wire `CIKernel`
+    ///   to the WGSL shader registry and run it through `CIContextRenderer`.
     public func apply(
         extent: CGRect,
         roiCallback: @escaping (Int, CGRect) -> CGRect,
         arguments: [Any]?
     ) -> CIImage? {
+        // TODO: route through the WebGPU compute pipeline; for now return a
+        // placeholder image so callers do not crash but their output is blank.
         CIImage(extent: extent)
     }
 }
@@ -138,7 +143,11 @@ public class CIKernel {
 public class CIColorKernel: CIKernel {
 
     /// Applies the kernel to the specified image.
+    ///
+    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
+    ///   override currently returns a blank placeholder image.
     public func apply(extent: CGRect, arguments: [Any]?) -> CIImage? {
+        // TODO: route through the WebGPU compute pipeline.
         CIImage(extent: extent)
     }
 }
@@ -150,12 +159,16 @@ public class CIColorKernel: CIKernel {
 public class CIWarpKernel: CIKernel {
 
     /// Applies the kernel to the specified image.
+    ///
+    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
+    ///   override currently returns a blank placeholder image.
     public func apply(
         extent: CGRect,
         roiCallback: @escaping (Int, CGRect) -> CGRect,
         image: CIImage,
         arguments: [Any]?
     ) -> CIImage? {
+        // TODO: route through the WebGPU compute pipeline.
         CIImage(extent: extent)
     }
 }
@@ -166,8 +179,13 @@ public class CIWarpKernel: CIKernel {
 public class CIBlendKernel: CIColorKernel {
 
     /// Applies the kernel to blend the foreground and background images.
+    ///
+    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
+    ///   override currently returns a blank placeholder image whose extent
+    ///   is the union of the two inputs.
     public func apply(foreground: CIImage, background: CIImage) -> CIImage? {
         let extent = foreground.extent.union(background.extent)
+        // TODO: route through the WebGPU compute pipeline.
         return CIImage(extent: extent)
     }
 
@@ -177,6 +195,11 @@ public class CIBlendKernel: CIColorKernel {
     }
 
     // MARK: - Built-in Blend Kernels
+    //
+    // The force-unwrap on `CIBlendKernel(source:)` below is intentional: the
+    // initializer never returns nil for the hardcoded shader-name strings
+    // (see `init?(source:)` above — it only fails if `source` is empty).
+    // These statics would be inexpressible as optionals in Apple's public API.
 
     /// Source over compositing blend kernel.
     nonisolated(unsafe) public static let sourceOver = CIBlendKernel(source: "sourceOver")!

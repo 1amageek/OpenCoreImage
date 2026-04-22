@@ -7,8 +7,6 @@
 //  white balance, exposure, and other RAW processing algorithms.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 // MARK: - CIRAWDecoderVersion
 
@@ -582,22 +580,37 @@ public class CIRAWFilter: CIFilter {
     // MARK: - Initialization
 
     /// Creates a RAW filter from the image at the URL location that you specify.
+    ///
+    /// Returns `nil` when the file cannot be read or the data is not a
+    /// recognizable RAW/DNG container. This matches Apple's failable-init
+    /// contract — callers rely on `nil` to branch to a non-RAW path rather
+    /// than getting back a filter that silently produces a placeholder image.
     public convenience init?(imageURL: URL) {
+        let data: Data
+        do {
+            data = try Data(contentsOf: imageURL)
+        } catch {
+            return nil
+        }
+        guard let parsed = DNGParser.parse(data: data) else {
+            return nil
+        }
         self.init(name: "CIRAWFilter")
         self._imageURL = imageURL
-
-        // Try to load and parse the file
-        if let data = try? Data(contentsOf: imageURL) {
-            self._imageData = data
-            self._parsedRAWInfo = DNGParser.parse(data: data)
-        }
+        self._imageData = data
+        self._parsedRAWInfo = parsed
     }
 
     /// Creates a RAW filter from the image data and type hint that you specify.
+    ///
+    /// Returns `nil` when the data is not a recognizable RAW/DNG container.
     public convenience init?(imageData: Data, identifierHint: String?) {
+        guard let parsed = DNGParser.parse(data: imageData) else {
+            return nil
+        }
         self.init(name: "CIRAWFilter")
         self._imageData = imageData
-        self._parsedRAWInfo = DNGParser.parse(data: imageData)
+        self._parsedRAWInfo = parsed
     }
 
     // MARK: - Class Properties

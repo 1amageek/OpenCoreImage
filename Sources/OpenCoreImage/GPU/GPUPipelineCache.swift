@@ -6,7 +6,6 @@
 //
 
 #if arch(wasm32)
-import Foundation
 import SwiftWebGPU
 
 /// Caches compiled GPU compute pipelines to avoid recompilation.

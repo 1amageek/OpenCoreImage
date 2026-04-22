@@ -5,7 +5,6 @@
 //  Color adjustment filter protocols for Core Image.
 //
 
-import Foundation
 
 // MARK: - CIColorAbsoluteDifference
 

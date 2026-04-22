@@ -5,7 +5,6 @@
 //  Face detection algorithm using YCbCr skin color analysis.
 //
 
-import Foundation
 
 /// Face detection algorithm using skin color analysis in YCbCr color space.
 ///

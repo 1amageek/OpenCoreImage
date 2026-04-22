@@ -5,8 +5,6 @@
 //  The Core Image class that defines a color object.
 //
 
-import Foundation
-import OpenCoreGraphics
 
 /// The Core Image class that defines a color object.
 ///

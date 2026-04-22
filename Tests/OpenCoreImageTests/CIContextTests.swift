@@ -118,7 +118,7 @@ struct CIContextPixelValueTests {
             bitsPerComponent: 8,
             bytesPerRow: width * 4,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         ) else {
             Issue.record("Failed to create CGContext")
             return
@@ -156,7 +156,7 @@ struct CIContextPixelValueTests {
             bitsPerComponent: 8,
             bytesPerRow: width * 4,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         ) else {
             Issue.record("Failed to create CGContext")
             return
@@ -194,7 +194,7 @@ struct CIContextPixelValueTests {
             bitsPerComponent: 8,
             bytesPerRow: width * 4,
             space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         ) else {
             Issue.record("Failed to create CGContext")
             return

@@ -5,7 +5,6 @@
 //  Registry of WGSL compute shaders for built-in filters.
 //
 
-import Foundation
 
 /// Registry of WGSL compute shaders for built-in Core Image filters.
 internal struct WGSLShaderRegistry {

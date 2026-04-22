@@ -5,7 +5,6 @@
 //  QR code detection algorithm using finder pattern matching.
 //
 
-import Foundation
 
 /// QR code detection algorithm using finder pattern recognition.
 ///

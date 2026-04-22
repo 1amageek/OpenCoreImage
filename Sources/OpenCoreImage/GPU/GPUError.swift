@@ -5,7 +5,6 @@
 //  GPU-related error types.
 //
 
-import Foundation
 
 /// Errors that can occur during GPU operations.
 internal enum GPUError: Error, LocalizedError {
