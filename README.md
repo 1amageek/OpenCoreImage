@@ -57,6 +57,25 @@ swift test
 swift build --triple wasm32-unknown-wasi
 ```
 
+## WASM-Build Smoke Test
+
+OpenCoreImage's WebGPU-backed filters have no headless-browser harness yet
+(most `CI*` filters are API-only stubs; WGSL compute shader implementations
+are the main open work item). The compile step itself is the most useful
+signal we can extract without a live GPU — it catches regressions in the
+`OpenCoreGraphics` / `swift-webgpu` / `JavaScriptKit` transitive graph and
+type-checks all 180+ `CIFilter` declarations for `wasm32`.
+
+```bash
+bash tests/wasm-build.sh
+# Exits 0 on success, nonzero on compile failure.
+# Uses swift-6.3.1-RELEASE_wasm by default; override via WASM_SDK=<name>.
+```
+
+This is the tier-3 "WASM-build smoke" described in the workspace
+`CLAUDE.md`. A full browser-based E2E suite will arrive alongside the WGSL
+filter implementations.
+
 ## Core Types
 
 | Type | Description |
