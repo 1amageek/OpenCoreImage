@@ -22,6 +22,7 @@ public final class CIImage: @unchecked Sendable {
     // MARK: - Internal Storage
 
     internal let _extent: CGRect
+    internal let _baseExtent: CGRect
     internal let _colorSpace: CGColorSpace?
     internal let _cgImage: CGImage?
     internal let _color: CIColor?
@@ -63,6 +64,7 @@ public final class CIImage: @unchecked Sendable {
     /// Internal initializer with all parameters.
     internal init(
         extent: CGRect,
+        baseExtent: CGRect? = nil,
         colorSpace: CGColorSpace? = nil,
         cgImage: CGImage? = nil,
         color: CIColor? = nil,
@@ -80,6 +82,7 @@ public final class CIImage: @unchecked Sendable {
         contentAverageLightLevel: Float = 1.0
     ) {
         self._extent = extent
+        self._baseExtent = baseExtent ?? extent
         self._colorSpace = colorSpace
         self._cgImage = cgImage
         self._color = color
@@ -865,6 +868,7 @@ public final class CIImage: @unchecked Sendable {
 
         return CIImage(
             extent: newExtent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,

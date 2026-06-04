@@ -188,7 +188,7 @@ internal actor FilterGraphCompiler {
                     sourceTextureIndices[nodeId] = textureIndex
                 } else {
                     // Filter node - compile and create output texture
-                    let compiledNode = try await compileFilterNode(
+                    let compiledFilterNodes = try await compileFilterNode(
                         node: node,
                         nodeToTextureIndex: nodeToTextureIndex,
                         textures: &textures,
@@ -199,8 +199,11 @@ internal actor FilterGraphCompiler {
                         device: device
                     )
 
-                    nodeToTextureIndex[nodeId] = compiledNode.outputTextureIndex
-                    compiledNodes.append(compiledNode)
+                    guard let outputTextureIndex = compiledFilterNodes.last?.outputTextureIndex else {
+                        throw GPUError.unsupportedFilter(node.filterName)
+                    }
+                    nodeToTextureIndex[nodeId] = outputTextureIndex
+                    compiledNodes.append(contentsOf: compiledFilterNodes)
                 }
             }
 
@@ -236,13 +239,13 @@ internal actor FilterGraphCompiler {
         width: UInt32,
         height: UInt32,
         device: GPUDevice
-    ) async throws -> CompiledFilterNode {
+    ) async throws -> [CompiledFilterNode] {
         // Expand filter if needed (e.g., separable blur)
         let expandedFilters = expandFilter(name: node.filterName, parameters: node.parameters)
 
         // For multi-pass filters, we need to chain them
         var currentInputIndices = resolveInputTextureIndices(node: node, nodeToTextureIndex: nodeToTextureIndex)
-        var lastCompiledNode: CompiledFilterNode?
+        var compiledNodes: [CompiledFilterNode] = []
 
         for (index, filter) in expandedFilters.enumerated() {
             let isLastPass = (index == expandedFilters.count - 1)
@@ -300,13 +303,14 @@ internal actor FilterGraphCompiler {
                 uniformBuffer: uniformBuffer
             )
 
-            lastCompiledNode = CompiledFilterNode(
+            let compiledNode = CompiledFilterNode(
                 filterName: filter.name,
                 pipeline: pipeline,
                 bindGroup: bindGroup,
                 inputTextureIndices: currentInputIndices,
                 outputTextureIndex: outputIndex
             )
+            compiledNodes.append(compiledNode)
 
             // For multi-pass, chain the output to next pass input
             if !isLastPass {
@@ -314,7 +318,7 @@ internal actor FilterGraphCompiler {
             }
         }
 
-        return lastCompiledNode!
+        return compiledNodes
     }
 
     private func resolveInputTextureIndices(

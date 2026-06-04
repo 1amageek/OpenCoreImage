@@ -154,7 +154,7 @@ internal struct FilterGraphBuilder {
     /// Creates a base image (without filters) from a CIImage.
     private func createBaseImage(from image: CIImage) -> CIImage {
         CIImage(
-            extent: image._extent,
+            extent: image._baseExtent,
             colorSpace: image._colorSpace,
             cgImage: image._cgImage,
             color: image._color,
