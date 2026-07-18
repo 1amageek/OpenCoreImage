@@ -322,6 +322,11 @@ struct CIFilterProtocolTests {
         let output = filter.outputImage
         #expect(output != nil)
     }
+
+    @Test("Custom attributes default to nil")
+    func customAttributesDefaultToNil() {
+        #expect(CIFilter.customAttributes() == nil)
+    }
 }
 
 // MARK: - CIFilter Apply Tests

@@ -641,20 +641,22 @@ public protocol CIFilterConstructor {
 
 // MARK: - CIFilterProtocol
 
-/// Legacy marker protocol that all per-filter protocols (`CIGaussianBlur`, etc.)
-/// originally inherited from.
+/// The properties and type-level metadata used to configure a Core Image filter.
 ///
-/// - Important: Apple's CoreImage bridges per-filter Objective-C protocols
-///   (`@protocol CIGaussianBlur <CIFilter>`) to Swift protocols that inherit
-///   from the `CIFilter` class itself, not from a separate `CIFilterProtocol`.
-///   To preserve API compatibility, per-filter protocols in OpenCoreImage
-///   inherit from `CIFilter` directly. This type is kept only so existing
-///   references that spell `CIFilterProtocol` still compile; it is a marker
-///   conformance supplied by `CIFilter` and carries no members of its own.
+/// Built-in per-filter protocols inherit from this protocol, matching Core Image's
+/// typed filter API.
 public protocol CIFilterProtocol: AnyObject {
     /// The output image from the filter.
     var outputImage: CIImage? { get }
+
+    /// Returns custom attributes that describe the filter type.
+    static func customAttributes() -> [String: Any]?
 }
 
-// CIFilter already declares `outputImage`; this extension makes the marker conformance explicit.
+public extension CIFilterProtocol {
+    static func customAttributes() -> [String: Any]? {
+        nil
+    }
+}
+
 extension CIFilter: CIFilterProtocol {}
