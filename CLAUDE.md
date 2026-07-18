@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenCoreImage is a Swift library that provides **full API compatibility with Apple's CoreImage framework** for WebAssembly (WASM) environments.
+OpenCoreImage targets full CoreImage API compatibility for WebAssembly (WASM) environments. Current completion is measured per filter and execution path.
 
 ### Core Principle: Full Compatibility
 
-**The API must be 100% compatible with CoreImage.** This means:
+**The target API must be 100% compatible with CoreImage.** This means:
 - Identical type names, method signatures, and property names
-- Same behavior and semantics as CoreImage
-- Code written for CoreImage should compile and work without modification when using OpenCoreImage
+- Implemented behavior and semantics must be independently validated against CoreImage
+- Compatibility claims must identify the exercised filters and evidence
 
 ### How `canImport` Works
 
@@ -42,14 +42,14 @@ This library exists so that cross-platform Swift code can use CoreImage APIs eve
 # Build the package
 swift build
 
-# Run tests
-swift test
-
-# Run a specific test
-swift test --filter <TestName>
+# Run focused tests with a process timeout
+perl -e 'alarm 30; exec @ARGV' -- \
+  xcodebuild test -scheme OpenCoreImage -destination 'platform=macOS' \
+  -only-testing:OpenCoreImageTests
 
 # Build for WASM (requires SwiftWasm toolchain)
-swift build --triple wasm32-unknown-wasi
+swift build --swift-sdk swift-6.3.1-RELEASE_wasm
+cd Tests/e2e && npm test
 ```
 
 ## Architecture

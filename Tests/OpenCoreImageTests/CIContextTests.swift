@@ -94,6 +94,14 @@ struct CIContextCGImageCreationTests {
 @Suite("CIContext Pixel Value Verification")
 struct CIContextPixelValueTests {
 
+    private func rgbaBytes(from image: CGImage) -> [UInt8]? {
+        guard let data = image.data else {
+            Issue.record("CGImage has no pixel data")
+            return nil
+        }
+        return Array(data)
+    }
+
     @Test("Solid red image renders correct pixel values")
     func solidRedImagePixels() {
         let context = CIContext()
@@ -105,26 +113,7 @@ struct CIContextPixelValueTests {
             return
         }
 
-        // Extract pixel data from CGImage
-        let width = cgImage.width
-        let height = cgImage.height
-        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
-
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let cgContext = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        ) else {
-            Issue.record("Failed to create CGContext")
-            return
-        }
-
-        cgContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixelData = rgbaBytes(from: cgImage) else { return }
 
         // Check first pixel is red (R=255, G=0, B=0, A=255)
         #expect(pixelData[0] == 255, "Red channel should be 255")
@@ -144,25 +133,7 @@ struct CIContextPixelValueTests {
             return
         }
 
-        let width = cgImage.width
-        let height = cgImage.height
-        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
-
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let cgContext = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        ) else {
-            Issue.record("Failed to create CGContext")
-            return
-        }
-
-        cgContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixelData = rgbaBytes(from: cgImage) else { return }
 
         // Check first pixel is green (R=0, G=255, B=0, A=255)
         #expect(pixelData[0] == 0, "Red channel should be 0")
@@ -182,25 +153,7 @@ struct CIContextPixelValueTests {
             return
         }
 
-        let width = cgImage.width
-        let height = cgImage.height
-        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
-
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let cgContext = CGContext(
-            data: &pixelData,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        ) else {
-            Issue.record("Failed to create CGContext")
-            return
-        }
-
-        cgContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixelData = rgbaBytes(from: cgImage) else { return }
 
         // Alpha should be approximately 128 (0.5 * 255)
         // Premultiplied: RGB values should also be approximately 128

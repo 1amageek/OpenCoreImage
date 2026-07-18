@@ -1,6 +1,6 @@
 # OpenCoreImage
 
-A Swift library providing **full API compatibility with Apple's CoreImage framework** for WebAssembly (WASM) environments.
+A Swift library implementing CoreImage-compatible APIs and WebGPU compute paths for WebAssembly (WASM) environments.
 
 ## Overview
 
@@ -22,7 +22,7 @@ let outputImage = filter?.outputImage
 
 ## Requirements
 
-- Swift 6.2+
+- Swift 6.3.1+
 - For WASM: SwiftWasm toolchain
 
 ## Installation
@@ -50,31 +50,29 @@ Then add it as a dependency to your target:
 # Build the package
 swift build
 
-# Run tests
-swift test
+# Run focused tests with a 30-second process timeout
+perl -e 'alarm 30; exec @ARGV' -- \
+  xcodebuild test -scheme OpenCoreImage -destination 'platform=macOS' \
+  -only-testing:OpenCoreImageTests
 
 # Build for WASM (requires SwiftWasm toolchain)
-swift build --triple wasm32-unknown-wasi
+swift build --swift-sdk swift-6.3.1-RELEASE_wasm
 ```
 
 ## WASM-Build Smoke Test
 
-OpenCoreImage's WebGPU-backed filters have no headless-browser harness yet
-(most `CI*` filters are API-only stubs; WGSL compute shader implementations
-are the main open work item). The compile step itself is the most useful
-signal we can extract without a live GPU — it catches regressions in the
-`OpenCoreGraphics` / `swift-webgpu` / `JavaScriptKit` transitive graph and
-type-checks all 180+ `CIFilter` declarations for `wasm32`.
+OpenCoreImage has a real-browser harness that evaluates a filter graph,
+compiles WGSL, executes WebGPU compute work, and checks GPU readback. The
+current verified baseline is 687 native tests and 7 browser checks.
 
 ```bash
 bash tests/wasm-build.sh
-# Exits 0 on success, nonzero on compile failure.
-# Uses swift-6.3.1-RELEASE_wasm by default; override via WASM_SDK=<name>.
+cd Tests/e2e && npm test
 ```
 
-This is the tier-3 "WASM-build smoke" described in the workspace
-`CLAUDE.md`. A full browser-based E2E suite will arrive alongside the WGSL
-filter implementations.
+Many of the 180+ filter declarations remain API shells or lack complete
+semantic parity. The browser checks prove the exercised filters and compiler
+path only; filter-by-filter validation remains open.
 
 ## Core Types
 

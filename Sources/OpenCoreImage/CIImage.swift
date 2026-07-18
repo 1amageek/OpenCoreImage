@@ -1071,6 +1071,7 @@ public final class CIImage: @unchecked Sendable {
         }
         return CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1092,6 +1093,7 @@ public final class CIImage: @unchecked Sendable {
     public func insertingIntermediate(cache: Bool) -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1110,6 +1112,7 @@ public final class CIImage: @unchecked Sendable {
     public func insertingTiledIntermediate() -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1130,6 +1133,7 @@ public final class CIImage: @unchecked Sendable {
     public func matchedToWorkingSpace(from colorSpace: CGColorSpace) -> CIImage? {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1146,6 +1150,7 @@ public final class CIImage: @unchecked Sendable {
     public func matchedFromWorkingSpace(to colorSpace: CGColorSpace) -> CIImage? {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1224,6 +1229,7 @@ public final class CIImage: @unchecked Sendable {
     public func samplingNearest() -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1242,6 +1248,7 @@ public final class CIImage: @unchecked Sendable {
     public func samplingLinear() -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1269,6 +1276,7 @@ public final class CIImage: @unchecked Sendable {
     public func settingContentHeadroom(_ headroom: Float) -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
@@ -1289,6 +1297,7 @@ public final class CIImage: @unchecked Sendable {
     public func settingContentAverageLightLevel(_ level: Float) -> CIImage {
         CIImage(
             extent: _extent,
+            baseExtent: _baseExtent,
             colorSpace: _colorSpace,
             cgImage: _cgImage,
             color: _color,
