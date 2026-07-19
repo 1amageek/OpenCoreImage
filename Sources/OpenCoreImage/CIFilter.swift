@@ -79,7 +79,7 @@ public class CIFilter {
 
         // Create standard built-in filter; unknown names return nil to match
         // Apple's CoreImage behavior.
-        guard CIFilter.builtInFilterNames.contains(name) else {
+        guard CIFilter.supportedBuiltInFilterNames.contains(name) else {
             return nil
         }
         let filter = CIFilter(filterName: name)
@@ -133,7 +133,7 @@ public class CIFilter {
             } else {
                 return nil
             }
-        } else if CIFilter.builtInFilterNames.contains(name) {
+        } else if CIFilter.supportedBuiltInFilterNames.contains(name) {
             // Create standard built-in filter.
             self._name = name
             setDefaults()
@@ -330,9 +330,8 @@ public class CIFilter {
         // Check if this is a generator filter (no input image required)
         if Self.isGeneratorFilter(_name) {
             // Generator filters create content from scratch
-            // Create a placeholder CIImage and apply the generator filter
-            let placeholder = CIImage(extent: .infinite, colorSpace: nil, cgImage: nil, color: nil, url: nil, data: nil, pixelData: nil, properties: [:], transform: .identity, filters: [])
-            return placeholder.applyingFilter(_name, parameters: _inputValues)
+            let generatorSource = CIImage(extent: .infinite, colorSpace: nil, cgImage: nil, color: nil, url: nil, data: nil, pixelData: nil, properties: [:], transform: .identity, filters: [])
+            return generatorSource.applyingFilter(_name, parameters: _inputValues)
         }
 
         // Standard and compositing filters require an input image
@@ -401,7 +400,10 @@ public class CIFilter {
         arguments args: [Any]?,
         options: [String: Any]?
     ) -> CIImage? {
-        // Placeholder implementation
+        // Custom Core Image kernel compilation is unavailable on WebAssembly.
+        // Returning nil preserves the failable contract without fabricating an
+        // output image that was never evaluated.
+        _ = (kernel, args, options)
         return nil
     }
 
@@ -413,7 +415,7 @@ public class CIFilter {
     /// Category filtering is coarse: a filter is considered to match a category if
     /// every requested category is inferred to apply via `categoriesForFilter(_:)`.
     public class func filterNames(inCategories categories: [String]?) -> [String] {
-        let allNames = Array(builtInFilterNames) + Array(_registeredFilters.keys)
+        let allNames = Array(supportedBuiltInFilterNames) + Array(_registeredFilters.keys)
         guard let required = categories, !required.isEmpty else {
             return allNames
         }
@@ -590,6 +592,15 @@ public class CIFilter {
         // RAW
         "CIRAWFilter"
     ]
+
+    /// Built-in names with an executable WebGPU implementation.
+    ///
+    /// `builtInFilterNames` remains the compatibility catalog used to keep the
+    /// public factory surface in sync. Availability APIs and failable
+    /// initializers expose only filters that can actually compile to WGSL.
+    internal static let supportedBuiltInFilterNames: Set<String> = Set(
+        WGSLShaderRegistry.registeredFilters.filter { builtInFilterNames.contains($0) }
+    )
 }
 
 // MARK: - Equatable

@@ -116,8 +116,8 @@ open class CIImageProcessorKernel: @unchecked Sendable {
         inputs: [CIImage]?,
         arguments: [String: Any]?
     ) throws -> CIImage {
-        // Placeholder implementation
-        CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0)).cropped(to: extent)
+        _ = (extent, inputs, arguments)
+        throw CIError.notImplemented
     }
 
     /// Call this method on your multiple-output Core Image Processor Kernel subclass to create
@@ -127,14 +127,8 @@ open class CIImageProcessorKernel: @unchecked Sendable {
         inputs: [CIImage]?,
         arguments: [String: Any]?
     ) throws -> [CIImage] {
-        // Placeholder implementation
-        extents.map { vector in
-            let extent = CGRect(x: CGFloat(vector.x),
-                              y: CGFloat(vector.y),
-                              width: CGFloat(vector.z),
-                              height: CGFloat(vector.w))
-            return CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0)).cropped(to: extent)
-        }
+        _ = (extents, inputs, arguments)
+        throw CIError.notImplemented
     }
 
     /// Override this class method if you want any of the inputs to be in a specific pixel format.

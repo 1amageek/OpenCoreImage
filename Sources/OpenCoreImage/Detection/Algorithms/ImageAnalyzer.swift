@@ -113,7 +113,7 @@ internal struct ImageAnalyzer: Sendable {
             let cgImage = try await ctx.createCGImageAsync(image, from: extent, format: .RGBA8, colorSpace: nil)
 
             // Extract pixel data from CGImage
-            guard let data = cgImage.dataProvider?.data,
+            guard cgImage.dataProvider?.data != nil,
                   let pixelData = extractPixelDataFromCGImage(cgImage, width: width, height: height) else {
                 return nil
             }

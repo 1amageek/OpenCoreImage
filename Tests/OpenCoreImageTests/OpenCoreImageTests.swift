@@ -87,15 +87,9 @@ struct OpenCoreImageIntegrationTests {
         #expect(output != nil)
     }
 
-    @Test("CIKernel apply produces valid output")
+    @Test("Unsupported custom kernels are rejected")
     func ciKernelApply() {
-        let kernel = CIColorKernel(source: "testKernel")!
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 100, height: 100),
-            arguments: nil
-        )
-        #expect(result != nil)
-        #expect(result?.extent.width == 100)
+        #expect(CIColorKernel(source: "testKernel") == nil)
     }
 
     @Test("CIBlendKernel compositing")

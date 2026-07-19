@@ -20,6 +20,7 @@ public final class CIContext: @unchecked Sendable {
     internal let _options: [CIContextOption: Any]
     internal let _workingColorSpace: CGColorSpace?
     internal let _workingFormat: CIFormat
+    private let destinationCGContext: CGContext?
 
     // MARK: - Renderer
 
@@ -36,6 +37,7 @@ public final class CIContext: @unchecked Sendable {
         self._options = [:]
         self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         self._workingFormat = .RGBAf
+        self.destinationCGContext = nil
         self.renderer = Self.createRenderer(options: nil)
     }
 
@@ -49,6 +51,7 @@ public final class CIContext: @unchecked Sendable {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
         self._workingFormat = options?[.workingFormat] as? CIFormat ?? .RGBAf
+        self.destinationCGContext = nil
         self.renderer = Self.createRenderer(options: options)
     }
 
@@ -62,6 +65,7 @@ public final class CIContext: @unchecked Sendable {
             self._workingColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         }
         self._workingFormat = options?[.workingFormat] as? CIFormat ?? .RGBAf
+        self.destinationCGContext = cgContext
         self.renderer = Self.createRenderer(options: options)
     }
 
@@ -504,8 +508,27 @@ public final class CIContext: @unchecked Sendable {
 
     /// Renders a region of an image to a rectangle in the context destination.
     public func draw(_ image: CIImage, in inRect: CGRect, from fromRect: CGRect) {
-        // Placeholder implementation
-        // In a full implementation, this would draw the image
+        guard let destinationCGContext else {
+            print("CIContext.draw: the context has no CGContext destination")
+            return
+        }
+        guard let cgImage = createCGImage(image, from: fromRect) else {
+            print("CIContext.draw: synchronous rendering cannot evaluate this image; use drawAsync(_:in:from:)")
+            return
+        }
+        destinationCGContext.draw(cgImage, in: inRect)
+    }
+
+    /// Asynchronously renders a region of an image to the context destination.
+    ///
+    /// This OpenCoreImage extension is the WebAssembly-safe counterpart of
+    /// `draw(_:in:from:)` for filter graphs that require WebGPU evaluation.
+    public func drawAsync(_ image: CIImage, in inRect: CGRect, from fromRect: CGRect) async throws {
+        guard let destinationCGContext else {
+            throw CIError.invalidArgument
+        }
+        let cgImage = try await createCGImageAsync(image, from: fromRect)
+        destinationCGContext.draw(cgImage, in: inRect)
     }
 
     // MARK: - Determining the Allowed Extents for Images

@@ -536,6 +536,10 @@ internal actor FilterGraphCompiler {
              "CILightenCompositing", "CIDifferenceCompositing",
              "CIMaximumCompositing", "CIMinimumCompositing",
              // Blend modes
+             "CIDarkenBlendMode", "CIDifferenceBlendMode",
+             "CILightenBlendMode", "CIMultiplyBlendMode",
+             "CIOverlayBlendMode", "CIScreenBlendMode",
+             "CISubtractBlendMode",
              "CIColorBurnBlendMode", "CIColorDodgeBlendMode",
              "CISoftLightBlendMode", "CIHardLightBlendMode",
              "CIExclusionBlendMode", "CIHueBlendMode",

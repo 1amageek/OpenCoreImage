@@ -14,30 +14,30 @@ import Foundation
 @Suite("CIKernel Initialization")
 struct CIKernelInitializationTests {
 
-    @Test("Initialize with source")
+    @Test("Invalid custom kernel source is rejected")
     func initWithSource() {
         let kernel = CIKernel(source: "kernel vec4 test() { return vec4(1.0); }")
-        #expect(kernel != nil)
+        #expect(kernel == nil)
     }
 
-    @Test("Initialize with Metal library data")
+    @Test("Empty Metal library data is rejected")
     func initWithMetalLibrary() {
         let data = Data()
         let kernel = CIKernel(functionName: "testKernel", fromMetalLibraryData: data)
-        #expect(kernel != nil)
+        #expect(kernel == nil)
     }
 
     @Test("Kernel has name")
     func kernelHasName() {
         let data = Data()
         let kernel = CIKernel(functionName: "myKernel", fromMetalLibraryData: data)
-        #expect(kernel?.name == "myKernel")
+        #expect(kernel == nil)
     }
 
     @Test("Source kernel uses source string as name")
     func sourceKernelUsesSourceAsName() {
         let kernel = CIKernel(source: "myKernelSource")
-        #expect(kernel?.name == "myKernelSource")
+        #expect(kernel == nil)
     }
 }
 
@@ -46,28 +46,14 @@ struct CIKernelInitializationTests {
 @Suite("CIKernel Apply")
 struct CIKernelApplyTests {
 
-    @Test("Apply kernel returns image")
+    @Test("Unsupported custom kernel cannot be created")
     func applyKernelReturnsImage() {
-        let kernel = CIKernel(source: "test")!
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 100, height: 100),
-            roiCallback: { _, rect in rect },
-            arguments: nil
-        )
-        #expect(result != nil)
-        #expect(result?.extent.width == 100)
-        #expect(result?.extent.height == 100)
+        #expect(CIKernel(source: "test") == nil)
     }
 
     @Test("Apply kernel with arguments")
     func applyKernelWithArguments() {
-        let kernel = CIKernel(source: "test")!
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 50, height: 50),
-            roiCallback: { _, rect in rect },
-            arguments: [10.0, 20.0]
-        )
-        #expect(result != nil)
+        #expect(CIKernel(source: "test") == nil)
     }
 }
 
@@ -79,27 +65,17 @@ struct CIColorKernelTests {
     @Test("Initialize color kernel")
     func initColorKernel() {
         let kernel = CIColorKernel(source: "kernel vec4 colorKernel() { return vec4(1.0); }")
-        #expect(kernel != nil)
+        #expect(kernel == nil)
     }
 
     @Test("Apply color kernel")
     func applyColorKernel() {
-        let kernel = CIColorKernel(source: "test")!
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 100, height: 100),
-            arguments: nil
-        )
-        #expect(result != nil)
+        #expect(CIColorKernel(source: "test") == nil)
     }
 
     @Test("Apply color kernel with arguments")
     func applyColorKernelWithArguments() {
-        let kernel = CIColorKernel(source: "test")!
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 100, height: 100),
-            arguments: [CIColor.red, 0.5]
-        )
-        #expect(result != nil)
+        #expect(CIColorKernel(source: "test") == nil)
     }
 }
 
@@ -111,20 +87,12 @@ struct CIWarpKernelTests {
     @Test("Initialize warp kernel")
     func initWarpKernel() {
         let kernel = CIWarpKernel(source: "kernel vec2 warpKernel() { return destCoord(); }")
-        #expect(kernel != nil)
+        #expect(kernel == nil)
     }
 
     @Test("Apply warp kernel")
     func applyWarpKernel() {
-        let kernel = CIWarpKernel(source: "test")!
-        let inputImage = CIImage(color: .red)
-        let result = kernel.apply(
-            extent: CGRect(x: 0, y: 0, width: 100, height: 100),
-            roiCallback: { _, rect in rect },
-            image: inputImage,
-            arguments: nil
-        )
-        #expect(result != nil)
+        #expect(CIWarpKernel(source: "test") == nil)
     }
 }
 
@@ -136,26 +104,17 @@ struct CIBlendKernelTests {
     @Test("Initialize blend kernel")
     func initBlendKernel() {
         let kernel = CIBlendKernel(source: "multiply")
-        #expect(kernel != nil)
+        #expect(kernel == nil)
     }
 
     @Test("Apply blend kernel")
     func applyBlendKernel() {
-        let kernel = CIBlendKernel(source: "multiply")!
-        let foreground = CIImage(color: .red).cropped(to: CGRect(x: 0, y: 0, width: 100, height: 100))
-        let background = CIImage(color: .blue).cropped(to: CGRect(x: 0, y: 0, width: 100, height: 100))
-        let result = kernel.apply(foreground: foreground, background: background)
-        #expect(result != nil)
+        #expect(CIBlendKernel(source: "multiply") == nil)
     }
 
     @Test("Apply blend kernel with color space")
     func applyBlendKernelWithColorSpace() {
-        let kernel = CIBlendKernel(source: "screen")!
-        let foreground = CIImage(color: .red)
-        let background = CIImage(color: .blue)
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        let result = kernel.apply(foreground: foreground, background: background, colorSpace: colorSpace)
-        #expect(result != nil)
+        #expect(CIBlendKernel(source: "screen") == nil)
     }
 }
 
@@ -199,6 +158,7 @@ struct CIBlendKernelBuiltInTests {
         #expect(result != nil)
         #expect(result?.extent.width == 100)
         #expect(result?.extent.height == 100)
+        #expect(result?._filters.last?.name == "CISourceOverCompositing")
     }
 
     @Test("Blend kernel with different sized inputs uses union extent")
@@ -211,6 +171,13 @@ struct CIBlendKernelBuiltInTests {
         // Union of (0,0,50,50) and (25,25,50,50) = (0,0,75,75)
         #expect(result?.extent.width == 75)
         #expect(result?.extent.height == 75)
+    }
+
+    @Test("Unsupported built-in blend kernels return nil instead of blank images")
+    func unsupportedBuiltInReturnsNil() {
+        let foreground = CIImage(color: .red)
+        let background = CIImage(color: .blue)
+        #expect(CIBlendKernel.clear.apply(foreground: foreground, background: background) == nil)
     }
 }
 

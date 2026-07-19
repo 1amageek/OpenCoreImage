@@ -63,16 +63,21 @@ swift build --swift-sdk swift-6.3.1-RELEASE_wasm
 
 OpenCoreImage has a real-browser harness that evaluates a filter graph,
 compiles WGSL, executes WebGPU compute work, and checks GPU readback. The
-current verified baseline is 687 native tests and 7 browser checks.
+current verified baseline is 695 native tests and 13 browser checks. Seven of
+the browser checks assert filter-specific RGBA pixels read back from WebGPU;
+the remaining checks cover API and graph behavior.
 
 ```bash
 bash tests/wasm-build.sh
 cd Tests/e2e && npm test
 ```
 
-Many of the 180+ filter declarations remain API shells or lack complete
-semantic parity. The browser checks prove the exercised filters and compiler
-path only; filter-by-filter validation remains open.
+The public catalog contains 233 current Core Image filter names. Availability
+enumeration and `CIFilter(name:)` expose the 169 names with a registered WGSL
+implementation; the other 64 names return `nil` instead of producing an
+unevaluated shell. The browser checks prove the seven exercised filter
+semantics and the complete graph-to-GPU path; the remaining registered shaders
+still require filter-by-filter pixel conformance validation.
 
 ## Core Types
 
@@ -86,7 +91,8 @@ path only; filter-by-filter validation remains open.
 
 ## Filter Categories
 
-OpenCoreImage provides protocols and implementations for all standard CoreImage filter categories:
+OpenCoreImage defines typed protocols across the standard Core Image filter
+categories. Executable availability is determined by the WGSL registry:
 
 - **Blur Filters** - Gaussian blur, box blur, motion blur, and more
 - **Color Adjustment Filters** - Exposure, hue, saturation, and color transformations

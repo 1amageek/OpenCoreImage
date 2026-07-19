@@ -27,7 +27,7 @@ struct CIContextInitializationTests {
             .priorityRequestLow: true
         ]
         let context = CIContext(options: options)
-        #expect(context != nil)
+        #expect(context.workingColorSpace != nil)
     }
 
     @Test("Offline GPU count is non-negative")
@@ -87,6 +87,7 @@ struct CIContextCGImageCreationTests {
         let cgImage = context.createCGImage(ciImage, from: ciImage.extent, format: .RGBA8, colorSpace: colorSpace, deferred: true)
         #expect(cgImage != nil)
     }
+
 }
 
 // MARK: - CIContext Pixel Value Verification Tests

@@ -92,7 +92,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
             let detectorOptions = JSObject.global.Object.function!.new()
             detectorOptions.fastMode = .boolean(true)
 
-            let detector = try await JSObject.global.FaceDetector.function!.new(detectorOptions)
+            let detector = JSObject.global.FaceDetector.function!.new(detectorOptions)
 
             // Create ImageData
             let imageDataJS = try createJSImageData(
@@ -206,7 +206,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendab
             _ = formats.push!("qr_code")
             detectorOptions.formats = formats.jsValue
 
-            let detector = try await JSObject.global.BarcodeDetector.function!.new(detectorOptions)
+            let detector = JSObject.global.BarcodeDetector.function!.new(detectorOptions)
 
             // Create ImageData
             let imageDataJS = try createJSImageData(

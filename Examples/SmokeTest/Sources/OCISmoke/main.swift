@@ -21,6 +21,7 @@ import OpenCoreGraphics
 nonisolated(unsafe) var statusText: String = "initializing"
 nonisolated(unsafe) var renderError: String?
 nonisolated(unsafe) var invertedPixelData: Data?
+nonisolated(unsafe) var renderedPixels: [String: [UInt8]] = [:]
 
 @_cdecl("setup")
 public func setup() {
@@ -29,6 +30,7 @@ public func setup() {
             statusText = "initializing"
             renderError = nil
             invertedPixelData = nil
+            renderedPixels = [:]
         },
         then: {
             await performRenderSetup()
@@ -64,11 +66,91 @@ private func performRenderSetup() async {
             return
         }
         invertedPixelData = data
+
+        let adjustmentSource = makeImage(pixel: [64, 128, 192, 255])
+        renderedPixels["exposure"] = try await renderFirstPixel(
+            adjustmentSource.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: 1.0]),
+            extent: adjustmentSource.extent,
+            context: context
+        )
+        renderedPixels["gamma"] = try await renderFirstPixel(
+            adjustmentSource.applyingFilter("CIGammaAdjust", parameters: ["inputPower": 2.0]),
+            extent: adjustmentSource.extent,
+            context: context
+        )
+        renderedPixels["controls"] = try await renderFirstPixel(
+            adjustmentSource.applyingFilter("CIColorControls", parameters: [
+                kCIInputBrightnessKey: 0.1,
+                kCIInputContrastKey: 1.0,
+                kCIInputSaturationKey: 1.0,
+            ]),
+            extent: adjustmentSource.extent,
+            context: context
+        )
+        renderedPixels["sepia"] = try await renderFirstPixel(
+            adjustmentSource.applyingFilter("CISepiaTone", parameters: [kCIInputIntensityKey: 1.0]),
+            extent: adjustmentSource.extent,
+            context: context
+        )
+
+        let foreground = makeImage(pixel: [255, 0, 0, 128])
+        let background = makeImage(pixel: [0, 0, 255, 255])
+        guard let blended = CIBlendKernel.sourceOver.apply(
+            foreground: foreground,
+            background: background
+        ) else {
+            throw SmokeRenderError.missingBlendOutput
+        }
+        renderedPixels["sourceOver"] = try await renderFirstPixel(
+            blended,
+            extent: foreground.extent,
+            context: context
+        )
+
+        let multiplyForeground = makeImage(pixel: [128, 64, 255, 255])
+        let multiplyBackground = makeImage(pixel: [128, 255, 64, 255])
+        let multiplied = multiplyForeground.applyingFilter(
+            "CIMultiplyBlendMode",
+            parameters: [kCIInputBackgroundImageKey: multiplyBackground]
+        )
+        renderedPixels["multiply"] = try await renderFirstPixel(
+            multiplied,
+            extent: multiplyForeground.extent,
+            context: context
+        )
         statusText = "ready"
     } catch {
         renderError = String(describing: error)
         statusText = "error"
     }
+}
+
+private enum SmokeRenderError: Error {
+    case missingPixelData
+    case missingBlendOutput
+}
+
+private func makeImage(pixel: [UInt8]) -> CIImage {
+    CIImage(
+        bitmapData: Data(pixel),
+        bytesPerRow: 4,
+        size: CGSize(width: 1, height: 1),
+        format: .RGBA8,
+        colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
+    )
+}
+
+@MainActor
+private func renderFirstPixel(
+    _ image: CIImage,
+    extent: CGRect,
+    context: CIContext
+) async throws -> [UInt8] {
+    let rendered = try await context.createCGImageAsync(image, from: extent)
+    guard let data = rendered.data, data.count >= 4 else {
+        throw SmokeRenderError.missingPixelData
+    }
+    return Array(data.prefix(4))
 }
 
 // MARK: - Tests
@@ -95,6 +177,54 @@ struct OCISmokeTests {
         #expect(data[1] >= 253, "green channel should be inverted to one")
         #expect(data[2] >= 253, "blue channel should be inverted to one")
         #expect(data[3] >= 253, "alpha should remain opaque")
+    }
+
+    @Test func exposureAdjustRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["exposure"])
+        #expect(abs(Int(pixel[0]) - 128) <= 1)
+        #expect(pixel[1] >= 254)
+        #expect(pixel[2] == 255)
+        #expect(pixel[3] == 255)
+    }
+
+    @Test func gammaAdjustRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["gamma"])
+        #expect(abs(Int(pixel[0]) - 16) <= 1)
+        #expect(abs(Int(pixel[1]) - 64) <= 1)
+        #expect(abs(Int(pixel[2]) - 145) <= 1)
+        #expect(pixel[3] == 255)
+    }
+
+    @Test func colorControlsRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["controls"])
+        #expect(abs(Int(pixel[0]) - 90) <= 1)
+        #expect(abs(Int(pixel[1]) - 154) <= 1)
+        #expect(abs(Int(pixel[2]) - 218) <= 1)
+        #expect(pixel[3] == 255)
+    }
+
+    @Test func sepiaToneRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["sepia"])
+        #expect(abs(Int(pixel[0]) - 159) <= 2)
+        #expect(abs(Int(pixel[1]) - 142) <= 2)
+        #expect(abs(Int(pixel[2]) - 111) <= 2)
+        #expect(pixel[3] == 255)
+    }
+
+    @Test func sourceOverBlendKernelRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["sourceOver"])
+        #expect(abs(Int(pixel[0]) - 128) <= 1)
+        #expect(pixel[1] <= 1)
+        #expect(abs(Int(pixel[2]) - 127) <= 1)
+        #expect(pixel[3] == 255)
+    }
+
+    @Test func multiplyBlendModeRunsThroughWebGPU() throws {
+        let pixel = try #require(renderedPixels["multiply"])
+        #expect(abs(Int(pixel[0]) - 64) <= 1)
+        #expect(abs(Int(pixel[1]) - 64) <= 1)
+        #expect(abs(Int(pixel[2]) - 64) <= 1)
+        #expect(pixel[3] == 255)
     }
 
     @Test func ciColorPreservesRGBA() throws {

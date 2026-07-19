@@ -313,7 +313,7 @@ struct CIRenderDestinationEquatableHashableTests {
 struct CIRenderInfoTests {
 
     @Test("Render info kernel execution time is non-negative")
-    func kernelExecutionTimeNonNegative() {
+    func kernelExecutionTimeNonNegative() throws {
         // Create a render task directly to get render info
         var pixelData = [UInt8](repeating: 0, count: 100 * 100 * 4)
         let destination = pixelData.withUnsafeMutableBytes { ptr in
@@ -327,12 +327,12 @@ struct CIRenderInfoTests {
         }
 
         let task = CIRenderTask(destination: destination)
-        let info = try? task.waitUntilCompleted()
-        #expect(info?.kernelExecutionTime ?? 0 >= 0)
+        let info = try task.waitUntilCompleted()
+        #expect(info.kernelExecutionTime >= 0)
     }
 
     @Test("Render info pass count is at least 1")
-    func passCountAtLeastOne() {
+    func passCountAtLeastOne() throws {
         var pixelData = [UInt8](repeating: 0, count: 100 * 100 * 4)
         let destination = pixelData.withUnsafeMutableBytes { ptr in
             CIRenderDestination(
@@ -345,12 +345,12 @@ struct CIRenderInfoTests {
         }
 
         let task = CIRenderTask(destination: destination)
-        let info = try? task.waitUntilCompleted()
-        #expect(info?.passCount ?? 0 >= 1)
+        let info = try task.waitUntilCompleted()
+        #expect(info.passCount >= 1)
     }
 
     @Test("Render info pixels processed matches dimensions")
-    func pixelsProcessedMatchesDimensions() {
+    func pixelsProcessedMatchesDimensions() throws {
         var pixelData = [UInt8](repeating: 0, count: 100 * 100 * 4)
         let destination = pixelData.withUnsafeMutableBytes { ptr in
             CIRenderDestination(
@@ -363,12 +363,12 @@ struct CIRenderInfoTests {
         }
 
         let task = CIRenderTask(destination: destination)
-        let info = try? task.waitUntilCompleted()
-        #expect(info?.pixelsProcessed == 10000)
+        let info = try task.waitUntilCompleted()
+        #expect(info.pixelsProcessed == 10000)
     }
 
     @Test("Render info kernel compile time is non-negative")
-    func kernelCompileTimeNonNegative() {
+    func kernelCompileTimeNonNegative() throws {
         var pixelData = [UInt8](repeating: 0, count: 100 * 100 * 4)
         let destination = pixelData.withUnsafeMutableBytes { ptr in
             CIRenderDestination(
@@ -381,8 +381,8 @@ struct CIRenderInfoTests {
         }
 
         let task = CIRenderTask(destination: destination)
-        let info = try? task.waitUntilCompleted()
-        #expect(info?.kernelCompileTime ?? 0 >= 0)
+        let info = try task.waitUntilCompleted()
+        #expect(info.kernelCompileTime >= 0)
     }
 }
 

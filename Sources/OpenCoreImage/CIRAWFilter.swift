@@ -443,8 +443,19 @@ private final class RAWProcessor {
 
 // MARK: - DNG Header Parser
 
-/// Simple DNG/TIFF header parser for extracting RAW image information
+/// TIFF/DNG parser for uncompressed single-channel CFA image data.
 private struct DNGParser {
+
+    private enum ByteOrder {
+        case littleEndian
+        case bigEndian
+    }
+
+    private struct Entry {
+        let type: UInt16
+        let count: UInt32
+        let valueFieldOffset: Int
+    }
 
     struct RAWInfo {
         var width: Int
@@ -456,70 +467,314 @@ private struct DNGParser {
         var whiteLevel: UInt16
     }
 
-    /// Parse DNG/TIFF data and extract RAW image information
+    /// Parses uncompressed 8-bit or 16-bit CFA strips from a TIFF/DNG IFD.
+    ///
+    /// Compressed RAW formats and tiled storage are rejected. Returning `nil`
+    /// is important here: callers must never receive fabricated pixels for an
+    /// input that the decoder does not understand.
     static func parse(data: Data) -> RAWInfo? {
-        guard data.count > 8 else { return nil }
+        guard data.count >= 8 else { return nil }
 
-        // Check TIFF magic number
-        let magic = data.prefix(2)
-        let isLittleEndian = magic[0] == 0x49 && magic[1] == 0x49  // "II"
-        let isBigEndian = magic[0] == 0x4D && magic[1] == 0x4D     // "MM"
+        let byteOrder: ByteOrder
+        switch (data[0], data[1]) {
+        case (0x49, 0x49):
+            byteOrder = .littleEndian
+        case (0x4D, 0x4D):
+            byteOrder = .bigEndian
+        default:
+            return nil
+        }
 
-        guard isLittleEndian || isBigEndian else { return nil }
+        guard readUInt16(data, at: 2, order: byteOrder) == 42,
+              let rootOffsetValue = readUInt32(data, at: 4, order: byteOrder)
+        else {
+            return nil
+        }
 
-        // For simplicity, we'll create a simulated RAW from any image data
-        // Real implementation would parse TIFF IFDs to find RAW data
+        var pendingOffsets = [Int(rootOffsetValue)]
+        var visitedOffsets: Set<Int> = []
 
-        // Assume 16-bit RAW data starts after a header
-        // This is a simplified approach - real DNG parsing is more complex
-
-        // Try to extract dimensions from common locations
-        let width = 4000  // Default dimensions for demo
-        let height = 3000
-
-        // Convert data to 16-bit raw values (simulated)
-        var rawData = [UInt16](repeating: 0, count: width * height)
-
-        // If data is large enough, try to interpret as RAW
-        if data.count >= width * height * 2 {
-            for i in 0..<(width * height) {
-                let offset = i * 2
-                if isLittleEndian {
-                    rawData[i] = UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
-                } else {
-                    rawData[i] = (UInt16(data[offset]) << 8) | UInt16(data[offset + 1])
-                }
+        while let ifdOffset = pendingOffsets.popLast() {
+            guard visitedOffsets.insert(ifdOffset).inserted,
+                  let parsedIFD = parseIFD(data, at: ifdOffset, order: byteOrder)
+            else {
+                continue
             }
-        } else {
-            // Generate test pattern if data is too small
-            for y in 0..<height {
-                for x in 0..<width {
-                    // Create a color gradient test pattern
-                    let r = UInt16((Float(x) / Float(width)) * 65535)
-                    let g = UInt16((Float(y) / Float(height)) * 65535)
-                    let b = UInt16((Float(x + y) / Float(width + height)) * 65535)
 
-                    let index = y * width + x
-                    let pattern = BayerPattern.rggb
-
-                    switch pattern.colorAt(x: x, y: y) {
-                    case .red: rawData[index] = r
-                    case .green: rawData[index] = g
-                    case .blue: rawData[index] = b
-                    }
-                }
+            pendingOffsets.append(contentsOf: parsedIFD.linkedOffsets)
+            if let rawInfo = decodeRAWInfo(
+                entries: parsedIFD.entries,
+                data: data,
+                order: byteOrder
+            ) {
+                return rawInfo
             }
         }
 
+        return nil
+    }
+
+    private static func parseIFD(
+        _ data: Data,
+        at offset: Int,
+        order: ByteOrder
+    ) -> (entries: [UInt16: Entry], linkedOffsets: [Int])? {
+        guard let entryCount = readUInt16(data, at: offset, order: order) else {
+            return nil
+        }
+
+        let entriesOffset = offset + 2
+        let entriesByteCount = Int(entryCount) * 12
+        guard entriesOffset >= 0,
+              entriesByteCount >= 0,
+              entriesOffset <= data.count - entriesByteCount,
+              entriesOffset + entriesByteCount <= data.count - 4
+        else {
+            return nil
+        }
+
+        var entries: [UInt16: Entry] = [:]
+        for index in 0..<Int(entryCount) {
+            let entryOffset = entriesOffset + index * 12
+            guard let tag = readUInt16(data, at: entryOffset, order: order),
+                  let type = readUInt16(data, at: entryOffset + 2, order: order),
+                  let count = readUInt32(data, at: entryOffset + 4, order: order)
+            else {
+                return nil
+            }
+            entries[tag] = Entry(type: type, count: count, valueFieldOffset: entryOffset + 8)
+        }
+
+        var linkedOffsets: [Int] = []
+        let nextOffsetPosition = entriesOffset + entriesByteCount
+        if let nextOffset = readUInt32(data, at: nextOffsetPosition, order: order), nextOffset != 0 {
+            linkedOffsets.append(Int(nextOffset))
+        }
+        if let subIFDs = entries[330] {
+            linkedOffsets.append(contentsOf: integerValues(
+                for: subIFDs,
+                data: data,
+                order: order
+            ).map(Int.init))
+        }
+
+        return (entries, linkedOffsets)
+    }
+
+    private static func decodeRAWInfo(
+        entries: [UInt16: Entry],
+        data: Data,
+        order: ByteOrder
+    ) -> RAWInfo? {
+        guard let width = firstInteger(tag: 256, entries: entries, data: data, order: order),
+              let height = firstInteger(tag: 257, entries: entries, data: data, order: order),
+              let bits = firstInteger(tag: 258, entries: entries, data: data, order: order),
+              let compression = firstInteger(tag: 259, entries: entries, data: data, order: order),
+              let photometric = firstInteger(tag: 262, entries: entries, data: data, order: order),
+              let stripEntry = entries[273],
+              let stripByteCountEntry = entries[279],
+              width >= 3,
+              height >= 3,
+              bits == 8 || bits == 16,
+              compression == 1,
+              photometric == 32803,
+              firstInteger(tag: 277, entries: entries, data: data, order: order) ?? 1 == 1
+        else {
+            return nil
+        }
+
+        let stripOffsets = integerValues(for: stripEntry, data: data, order: order)
+        let stripByteCounts = integerValues(for: stripByteCountEntry, data: data, order: order)
+        guard !stripOffsets.isEmpty, stripOffsets.count == stripByteCounts.count else {
+            return nil
+        }
+
+        let pixelCount = Int(width) * Int(height)
+        guard pixelCount / Int(width) == Int(height) else { return nil }
+        let bytesPerSample = Int(bits / 8)
+        let expectedByteCount = pixelCount * bytesPerSample
+        guard expectedByteCount / bytesPerSample == pixelCount else { return nil }
+
+        var sampleBytes = Data(capacity: expectedByteCount)
+        for (stripOffsetValue, stripByteCountValue) in zip(stripOffsets, stripByteCounts) {
+            let stripOffset = Int(stripOffsetValue)
+            let stripByteCount = Int(stripByteCountValue)
+            guard stripOffset >= 0,
+                  stripByteCount >= 0,
+                  stripOffset <= data.count - stripByteCount
+            else {
+                return nil
+            }
+            sampleBytes.append(data[stripOffset..<(stripOffset + stripByteCount)])
+        }
+        guard sampleBytes.count == expectedByteCount else { return nil }
+
+        var rawData = [UInt16]()
+        rawData.reserveCapacity(pixelCount)
+        if bits == 8 {
+            rawData.append(contentsOf: sampleBytes.map { UInt16($0) * 257 })
+        } else {
+            for offset in stride(from: 0, to: sampleBytes.count, by: 2) {
+                guard let value = readUInt16(sampleBytes, at: offset, order: order) else {
+                    return nil
+                }
+                rawData.append(value)
+            }
+        }
+
+        let pattern = bayerPattern(entries: entries, data: data, order: order) ?? .rggb
+        let blackLevel = numericValue(tag: 50714, entries: entries, data: data, order: order)
+            .map { UInt16(clamping: Int($0.rounded())) } ?? 0
+        let defaultWhiteLevel = bits == 16 ? UInt16.max : UInt16(255 * 257)
+        let whiteLevel = numericValue(tag: 50717, entries: entries, data: data, order: order)
+            .map { UInt16(clamping: Int($0.rounded())) } ?? defaultWhiteLevel
+        guard whiteLevel > blackLevel else { return nil }
+
         return RAWInfo(
-            width: width,
-            height: height,
-            bitsPerSample: 16,
+            width: Int(width),
+            height: Int(height),
+            bitsPerSample: Int(bits),
             rawData: rawData,
-            bayerPattern: .rggb,
-            blackLevel: 0,
-            whiteLevel: 65535
+            bayerPattern: pattern,
+            blackLevel: blackLevel,
+            whiteLevel: whiteLevel
         )
+    }
+
+    private static func bayerPattern(
+        entries: [UInt16: Entry],
+        data: Data,
+        order: ByteOrder
+    ) -> BayerPattern? {
+        if let repeatEntry = entries[33421] {
+            let dimensions = integerValues(for: repeatEntry, data: data, order: order)
+            guard dimensions == [2, 2] else { return nil }
+        }
+        guard let patternEntry = entries[33422],
+              let bytes = valueBytes(for: patternEntry, data: data, order: order),
+              bytes.count >= 4
+        else {
+            return nil
+        }
+        switch Array(bytes.prefix(4)) {
+        case [0, 1, 1, 2]: return .rggb
+        case [2, 1, 1, 0]: return .bggr
+        case [1, 0, 2, 1]: return .grbg
+        case [1, 2, 0, 1]: return .gbrg
+        default: return nil
+        }
+    }
+
+    private static func firstInteger(
+        tag: UInt16,
+        entries: [UInt16: Entry],
+        data: Data,
+        order: ByteOrder
+    ) -> UInt32? {
+        guard let entry = entries[tag] else { return nil }
+        return integerValues(for: entry, data: data, order: order).first
+    }
+
+    private static func integerValues(
+        for entry: Entry,
+        data: Data,
+        order: ByteOrder
+    ) -> [UInt32] {
+        guard let bytes = valueBytes(for: entry, data: data, order: order) else { return [] }
+        switch entry.type {
+        case 1:
+            return bytes.map(UInt32.init)
+        case 3:
+            return stride(from: 0, to: bytes.count, by: 2).compactMap {
+                readUInt16(bytes, at: $0, order: order).map(UInt32.init)
+            }
+        case 4:
+            return stride(from: 0, to: bytes.count, by: 4).compactMap {
+                readUInt32(bytes, at: $0, order: order)
+            }
+        default:
+            return []
+        }
+    }
+
+    private static func numericValue(
+        tag: UInt16,
+        entries: [UInt16: Entry],
+        data: Data,
+        order: ByteOrder
+    ) -> Double? {
+        guard let entry = entries[tag],
+              let bytes = valueBytes(for: entry, data: data, order: order)
+        else {
+            return nil
+        }
+        if entry.type == 5,
+           let numerator = readUInt32(bytes, at: 0, order: order),
+           let denominator = readUInt32(bytes, at: 4, order: order),
+           denominator != 0 {
+            return Double(numerator) / Double(denominator)
+        }
+        return integerValues(for: entry, data: data, order: order).first.map(Double.init)
+    }
+
+    private static func valueBytes(
+        for entry: Entry,
+        data: Data,
+        order: ByteOrder
+    ) -> Data? {
+        let typeSize: Int
+        switch entry.type {
+        case 1: typeSize = 1
+        case 3: typeSize = 2
+        case 4: typeSize = 4
+        case 5: typeSize = 8
+        default: return nil
+        }
+        let count = Int(entry.count)
+        guard count == 0 || count <= Int.max / typeSize else { return nil }
+        let byteCount = count * typeSize
+        let valueOffset: Int
+        if byteCount <= 4 {
+            valueOffset = entry.valueFieldOffset
+        } else {
+            guard let externalOffset = readUInt32(data, at: entry.valueFieldOffset, order: order) else {
+                return nil
+            }
+            valueOffset = Int(externalOffset)
+        }
+        guard valueOffset >= 0,
+              byteCount >= 0,
+              valueOffset <= data.count - byteCount
+        else {
+            return nil
+        }
+        return Data(data[valueOffset..<(valueOffset + byteCount)])
+    }
+
+    private static func readUInt16(_ data: Data, at offset: Int, order: ByteOrder) -> UInt16? {
+        guard offset >= 0, offset <= data.count - 2 else { return nil }
+        switch order {
+        case .littleEndian:
+            return UInt16(data[offset]) | UInt16(data[offset + 1]) << 8
+        case .bigEndian:
+            return UInt16(data[offset]) << 8 | UInt16(data[offset + 1])
+        }
+    }
+
+    private static func readUInt32(_ data: Data, at offset: Int, order: ByteOrder) -> UInt32? {
+        guard offset >= 0, offset <= data.count - 4 else { return nil }
+        switch order {
+        case .littleEndian:
+            return UInt32(data[offset])
+                | UInt32(data[offset + 1]) << 8
+                | UInt32(data[offset + 2]) << 16
+                | UInt32(data[offset + 3]) << 24
+        case .bigEndian:
+            return UInt32(data[offset]) << 24
+                | UInt32(data[offset + 1]) << 16
+                | UInt32(data[offset + 2]) << 8
+                | UInt32(data[offset + 3])
+        }
     }
 }
 
@@ -595,7 +850,7 @@ public class CIRAWFilter: CIFilter {
         guard let parsed = DNGParser.parse(data: data) else {
             return nil
         }
-        self.init(name: "CIRAWFilter")
+        self.init(filterName: "CIRAWFilter")
         self._imageURL = imageURL
         self._imageData = data
         self._parsedRAWInfo = parsed
@@ -608,7 +863,7 @@ public class CIRAWFilter: CIFilter {
         guard let parsed = DNGParser.parse(data: imageData) else {
             return nil
         }
-        self.init(name: "CIRAWFilter")
+        self.init(filterName: "CIRAWFilter")
         self._imageData = imageData
         self._parsedRAWInfo = parsed
     }
@@ -617,20 +872,9 @@ public class CIRAWFilter: CIFilter {
 
     /// An array containing the names of all supported camera models.
     public class var supportedCameraModels: [String] {
-        // Common camera models that produce DNG-compatible RAW files
-        [
-            "Canon EOS R5",
-            "Canon EOS R6",
-            "Nikon Z6",
-            "Nikon Z7",
-            "Sony A7 III",
-            "Sony A7R IV",
-            "Fujifilm X-T4",
-            "Panasonic S1R",
-            "Leica Q2",
-            "Hasselblad X1D",
-            "Adobe DNG Converter"
-        ]
+        // The built-in decoder supports a constrained TIFF/DNG storage layout,
+        // not vendor camera profiles. Do not advertise unverified models.
+        []
     }
 
     // MARK: - Supported Features
@@ -663,7 +907,7 @@ public class CIRAWFilter: CIFilter {
 
     /// A Boolean that indicates if the current image supports local tone curve adjustments.
     public var isLocalToneMapSupported: Bool {
-        _parsedRAWInfo != nil
+        false
     }
 
     /// A Boolean that indicates if the current image supports luminance noise reduction adjustments.
@@ -673,7 +917,7 @@ public class CIRAWFilter: CIFilter {
 
     /// A Boolean that indicates if the current image supports moire artifact reduction adjustments.
     public var isMoireReductionSupported: Bool {
-        _parsedRAWInfo != nil
+        false
     }
 
     /// A Boolean that indicates if the current image supports sharpness adjustments.
@@ -683,7 +927,7 @@ public class CIRAWFilter: CIFilter {
 
     /// A Boolean that indicates if the current image supports highlight recovery.
     public var isHighlightRecoverySupported: Bool {
-        _parsedRAWInfo != nil
+        false
     }
 
     /// The full native size of the unscaled image.
@@ -691,7 +935,7 @@ public class CIRAWFilter: CIFilter {
         if let info = _parsedRAWInfo {
             return CGSize(width: info.width, height: info.height)
         }
-        return CGSize(width: 4000, height: 3000)
+        return .zero
     }
 
     // MARK: - Configuration Properties
@@ -957,10 +1201,7 @@ public class CIRAWFilter: CIFilter {
             return cached
         }
 
-        guard let rawInfo = _parsedRAWInfo else {
-            // If no RAW data, return a placeholder gradient
-            return createPlaceholderImage()
-        }
+        guard let rawInfo = _parsedRAWInfo else { return nil }
 
         // Calculate white balance multipliers from temperature and tint
         var whiteBalance = temperatureToRGB(_neutralTemperature)
@@ -1023,34 +1264,6 @@ public class CIRAWFilter: CIFilter {
 
         _cachedOutput = outputImage
         return outputImage
-    }
-
-    private func createPlaceholderImage() -> CIImage {
-        // Create a gradient image as placeholder when no RAW data is available
-        let size = nativeSize
-
-        // Create a simple gradient pattern
-        var pixels = [UInt8](repeating: 0, count: Int(size.width * size.height) * 4)
-
-        for y in 0..<Int(size.height) {
-            for x in 0..<Int(size.width) {
-                let index = (y * Int(size.width) + x) * 4
-
-                // Create a colorful gradient
-                pixels[index + 0] = UInt8((Float(x) / Float(size.width)) * 255)      // R
-                pixels[index + 1] = UInt8((Float(y) / Float(size.height)) * 255)     // G
-                pixels[index + 2] = UInt8(128)                                         // B
-                pixels[index + 3] = 255                                                // A
-            }
-        }
-
-        return CIImage(
-            bitmapData: Data(pixels),
-            bytesPerRow: Int(size.width) * 4,
-            size: size,
-            format: .RGBA8,
-            colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
-        )
     }
 
     private func applyOrientation(to image: CIImage, orientation: CGImagePropertyOrientation) -> CIImage {

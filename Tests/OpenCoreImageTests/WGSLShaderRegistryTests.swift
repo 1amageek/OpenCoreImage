@@ -660,4 +660,20 @@ struct WGSLShaderRegistryFilterCountTests {
             #expect(filterName.hasPrefix("CI"), "\(filterName) should start with 'CI'")
         }
     }
+
+    @Test("Public blend-mode names resolve to executable shaders")
+    func publicBlendModeNamesResolve() {
+        let names = [
+            "CIDarkenBlendMode",
+            "CIDifferenceBlendMode",
+            "CILightenBlendMode",
+            "CIMultiplyBlendMode",
+            "CIOverlayBlendMode",
+            "CIScreenBlendMode",
+            "CISubtractBlendMode"
+        ]
+        for name in names {
+            #expect(WGSLShaderRegistry.hasShader(for: name), "Missing shader for \(name)")
+        }
+    }
 }

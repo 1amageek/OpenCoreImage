@@ -32,16 +32,14 @@ public class CIKernel {
     // MARK: - Private Storage
 
     private let _name: String?
-    private let _source: String?
+    fileprivate let _source: String?
     private let _outputFormat: CIFormat?
 
     // MARK: - Initialization
 
     /// Creates a kernel object from the specified kernel source code.
     public init?(functionName name: String, fromMetalLibraryData data: Data) {
-        self._name = name
-        self._source = nil
-        self._outputFormat = nil
+        return nil
     }
 
     /// Creates a kernel object from the specified kernel source code with an output pixel format.
@@ -52,20 +50,17 @@ public class CIKernel {
     ///   - format: The pixel format for the output image.
     /// - Throws: `CIKernelError` if the kernel cannot be created.
     public init(functionName name: String, fromMetalLibraryData data: Data, outputPixelFormat format: CIFormat) throws {
-        // In WASM environment, Metal libraries are not directly usable.
-        // This is a stub implementation that stores the configuration.
-        guard !data.isEmpty else {
-            throw CIKernelError.invalidMetalLibrary
-        }
-        self._name = name
-        self._source = nil
-        self._outputFormat = format
+        throw CIKernelError.compilationFailed("Metal library kernels are unavailable on WebAssembly")
     }
 
     /// Creates a kernel object from the specified kernel source code.
     public init?(source: String) {
+        return nil
+    }
+
+    fileprivate init(builtInName: String) {
         self._name = nil
-        self._source = source
+        self._source = builtInName
         self._outputFormat = nil
     }
 
@@ -102,17 +97,12 @@ public class CIKernel {
     /// - Returns: An array of `CIKernel` objects for each kernel found in the source.
     /// - Throws: `CIKernelError` if the source cannot be compiled.
     ///
-    /// - Note: In WASM environments, Metal source cannot be compiled directly.
-    ///         This method provides stub functionality and will throw an error.
+    /// - Note: In WASM environments, Metal source cannot be compiled directly,
+    ///         so this method throws `CIKernelError.compilationFailed`.
     public class func kernels(withMetalString source: String) throws -> [CIKernel] {
-        // Metal source compilation is not available in WASM environment.
-        // In a full implementation, this would parse the MSL source and create kernels.
         guard !source.isEmpty else {
             throw CIKernelError.invalidKernelSource
         }
-
-        // For WASM, we cannot compile Metal source directly.
-        // Return an empty array or a stub kernel.
         throw CIKernelError.compilationFailed("Metal compilation is not available in WASM environment. Use WGSL shaders instead.")
     }
 
@@ -120,19 +110,14 @@ public class CIKernel {
 
     /// Creates a new image by applying the kernel's image-processing routine.
     ///
-    /// - Warning: Custom-kernel evaluation is not implemented. The returned
-    ///   `CIImage` currently carries only `extent` metadata; no WGSL compute
-    ///   pass is dispatched. Downstream code must treat the result as an
-    ///   empty/placeholder image. Tracked for future work: wire `CIKernel`
-    ///   to the WGSL shader registry and run it through `CIContextRenderer`.
+    /// Custom Core Image Kernel Language and Metal kernels cannot be compiled
+    /// by the WebAssembly backend, so unsupported kernels return `nil`.
     public func apply(
         extent: CGRect,
         roiCallback: @escaping (Int, CGRect) -> CGRect,
         arguments: [Any]?
     ) -> CIImage? {
-        // TODO: route through the WebGPU compute pipeline; for now return a
-        // placeholder image so callers do not crash but their output is blank.
-        CIImage(extent: extent)
+        nil
     }
 }
 
@@ -144,11 +129,8 @@ public class CIColorKernel: CIKernel {
 
     /// Applies the kernel to the specified image.
     ///
-    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
-    ///   override currently returns a blank placeholder image.
     public func apply(extent: CGRect, arguments: [Any]?) -> CIImage? {
-        // TODO: route through the WebGPU compute pipeline.
-        CIImage(extent: extent)
+        nil
     }
 }
 
@@ -160,16 +142,13 @@ public class CIWarpKernel: CIKernel {
 
     /// Applies the kernel to the specified image.
     ///
-    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
-    ///   override currently returns a blank placeholder image.
     public func apply(
         extent: CGRect,
         roiCallback: @escaping (Int, CGRect) -> CGRect,
         image: CIImage,
         arguments: [Any]?
     ) -> CIImage? {
-        // TODO: route through the WebGPU compute pipeline.
-        CIImage(extent: extent)
+        nil
     }
 }
 
@@ -180,13 +159,14 @@ public class CIBlendKernel: CIColorKernel {
 
     /// Applies the kernel to blend the foreground and background images.
     ///
-    /// - Warning: See `CIKernel.apply(extent:roiCallback:arguments:)` — this
-    ///   override currently returns a blank placeholder image whose extent
-    ///   is the union of the two inputs.
     public func apply(foreground: CIImage, background: CIImage) -> CIImage? {
-        let extent = foreground.extent.union(background.extent)
-        // TODO: route through the WebGPU compute pipeline.
-        return CIImage(extent: extent)
+        guard let filterName = Self.filterNameByKernelIdentifier[_source ?? ""] else {
+            return nil
+        }
+        return foreground.applyingFilter(
+            filterName,
+            parameters: [kCIInputBackgroundImageKey: background]
+        )
     }
 
     /// Applies the kernel to blend the foreground and background images with a color match.
@@ -196,130 +176,151 @@ public class CIBlendKernel: CIColorKernel {
 
     // MARK: - Built-in Blend Kernels
     //
-    // The force-unwrap on `CIBlendKernel(source:)` below is intentional: the
-    // initializer never returns nil for the hardcoded shader-name strings
-    // (see `init?(source:)` above — it only fails if `source` is empty).
-    // These statics would be inexpressible as optionals in Apple's public API.
+    private static let filterNameByKernelIdentifier: [String: String] = [
+        "sourceOver": "CISourceOverCompositing",
+        "sourceIn": "CISourceInCompositing",
+        "sourceOut": "CISourceOutCompositing",
+        "sourceAtop": "CISourceAtopCompositing",
+        "multiply": "CIMultiplyBlendMode",
+        "screen": "CIScreenBlendMode",
+        "overlay": "CIOverlayBlendMode",
+        "darken": "CIDarkenBlendMode",
+        "lighten": "CILightenBlendMode",
+        "colorDodge": "CIColorDodgeBlendMode",
+        "colorBurn": "CIColorBurnBlendMode",
+        "hardLight": "CIHardLightBlendMode",
+        "softLight": "CISoftLightBlendMode",
+        "difference": "CIDifferenceBlendMode",
+        "exclusion": "CIExclusionBlendMode",
+        "hue": "CIHueBlendMode",
+        "saturation": "CISaturationBlendMode",
+        "color": "CIColorBlendMode",
+        "luminosity": "CILuminosityBlendMode",
+        "pinLight": "CIPinLightBlendMode",
+        "linearBurn": "CILinearBurnBlendMode",
+        "linearDodge": "CILinearDodgeBlendMode",
+        "divide": "CIDivideBlendMode",
+    ]
 
     /// Source over compositing blend kernel.
-    nonisolated(unsafe) public static let sourceOver = CIBlendKernel(source: "sourceOver")!
+    nonisolated(unsafe) public static let sourceOver = CIBlendKernel(builtInName: "sourceOver")
 
     /// Source in compositing blend kernel.
-    nonisolated(unsafe) public static let sourceIn = CIBlendKernel(source: "sourceIn")!
+    nonisolated(unsafe) public static let sourceIn = CIBlendKernel(builtInName: "sourceIn")
 
     /// Source out compositing blend kernel.
-    nonisolated(unsafe) public static let sourceOut = CIBlendKernel(source: "sourceOut")!
+    nonisolated(unsafe) public static let sourceOut = CIBlendKernel(builtInName: "sourceOut")
 
     /// Source atop compositing blend kernel.
-    nonisolated(unsafe) public static let sourceAtop = CIBlendKernel(source: "sourceAtop")!
+    nonisolated(unsafe) public static let sourceAtop = CIBlendKernel(builtInName: "sourceAtop")
 
     /// Destination over compositing blend kernel.
-    nonisolated(unsafe) public static let destinationOver = CIBlendKernel(source: "destinationOver")!
+    nonisolated(unsafe) public static let destinationOver = CIBlendKernel(builtInName: "destinationOver")
 
     /// Destination in compositing blend kernel.
-    nonisolated(unsafe) public static let destinationIn = CIBlendKernel(source: "destinationIn")!
+    nonisolated(unsafe) public static let destinationIn = CIBlendKernel(builtInName: "destinationIn")
 
     /// Destination out compositing blend kernel.
-    nonisolated(unsafe) public static let destinationOut = CIBlendKernel(source: "destinationOut")!
+    nonisolated(unsafe) public static let destinationOut = CIBlendKernel(builtInName: "destinationOut")
 
     /// Destination atop compositing blend kernel.
-    nonisolated(unsafe) public static let destinationAtop = CIBlendKernel(source: "destinationAtop")!
+    nonisolated(unsafe) public static let destinationAtop = CIBlendKernel(builtInName: "destinationAtop")
 
     /// Exclusive or compositing blend kernel.
-    nonisolated(unsafe) public static let exclusiveOr = CIBlendKernel(source: "exclusiveOr")!
+    nonisolated(unsafe) public static let exclusiveOr = CIBlendKernel(builtInName: "exclusiveOr")
 
     /// Multiply blend kernel.
-    nonisolated(unsafe) public static let multiply = CIBlendKernel(source: "multiply")!
+    nonisolated(unsafe) public static let multiply = CIBlendKernel(builtInName: "multiply")
 
     /// Screen blend kernel.
-    nonisolated(unsafe) public static let screen = CIBlendKernel(source: "screen")!
+    nonisolated(unsafe) public static let screen = CIBlendKernel(builtInName: "screen")
 
     /// Overlay blend kernel.
-    nonisolated(unsafe) public static let overlay = CIBlendKernel(source: "overlay")!
+    nonisolated(unsafe) public static let overlay = CIBlendKernel(builtInName: "overlay")
 
     /// Darken blend kernel.
-    nonisolated(unsafe) public static let darken = CIBlendKernel(source: "darken")!
+    nonisolated(unsafe) public static let darken = CIBlendKernel(builtInName: "darken")
 
     /// Lighten blend kernel.
-    nonisolated(unsafe) public static let lighten = CIBlendKernel(source: "lighten")!
+    nonisolated(unsafe) public static let lighten = CIBlendKernel(builtInName: "lighten")
 
     /// Color dodge blend kernel.
-    nonisolated(unsafe) public static let colorDodge = CIBlendKernel(source: "colorDodge")!
+    nonisolated(unsafe) public static let colorDodge = CIBlendKernel(builtInName: "colorDodge")
 
     /// Color burn blend kernel.
-    nonisolated(unsafe) public static let colorBurn = CIBlendKernel(source: "colorBurn")!
+    nonisolated(unsafe) public static let colorBurn = CIBlendKernel(builtInName: "colorBurn")
 
     /// Hard light blend kernel.
-    nonisolated(unsafe) public static let hardLight = CIBlendKernel(source: "hardLight")!
+    nonisolated(unsafe) public static let hardLight = CIBlendKernel(builtInName: "hardLight")
 
     /// Soft light blend kernel.
-    nonisolated(unsafe) public static let softLight = CIBlendKernel(source: "softLight")!
+    nonisolated(unsafe) public static let softLight = CIBlendKernel(builtInName: "softLight")
 
     /// Difference blend kernel.
-    nonisolated(unsafe) public static let difference = CIBlendKernel(source: "difference")!
+    nonisolated(unsafe) public static let difference = CIBlendKernel(builtInName: "difference")
 
     /// Exclusion blend kernel.
-    nonisolated(unsafe) public static let exclusion = CIBlendKernel(source: "exclusion")!
+    nonisolated(unsafe) public static let exclusion = CIBlendKernel(builtInName: "exclusion")
 
     /// Hue blend kernel.
-    nonisolated(unsafe) public static let hue = CIBlendKernel(source: "hue")!
+    nonisolated(unsafe) public static let hue = CIBlendKernel(builtInName: "hue")
 
     /// Saturation blend kernel.
-    nonisolated(unsafe) public static let saturation = CIBlendKernel(source: "saturation")!
+    nonisolated(unsafe) public static let saturation = CIBlendKernel(builtInName: "saturation")
 
     /// Color blend kernel.
-    nonisolated(unsafe) public static let color = CIBlendKernel(source: "color")!
+    nonisolated(unsafe) public static let color = CIBlendKernel(builtInName: "color")
 
     /// Luminosity blend kernel.
-    nonisolated(unsafe) public static let luminosity = CIBlendKernel(source: "luminosity")!
+    nonisolated(unsafe) public static let luminosity = CIBlendKernel(builtInName: "luminosity")
 
     /// Clear blend kernel.
-    nonisolated(unsafe) public static let clear = CIBlendKernel(source: "clear")!
+    nonisolated(unsafe) public static let clear = CIBlendKernel(builtInName: "clear")
 
     /// Copy blend kernel.
-    nonisolated(unsafe) public static let copy = CIBlendKernel(source: "copy")!
+    nonisolated(unsafe) public static let copy = CIBlendKernel(builtInName: "copy")
 
     /// Component add blend kernel.
-    nonisolated(unsafe) public static let componentAdd = CIBlendKernel(source: "componentAdd")!
+    nonisolated(unsafe) public static let componentAdd = CIBlendKernel(builtInName: "componentAdd")
 
     /// Component multiply blend kernel.
-    nonisolated(unsafe) public static let componentMultiply = CIBlendKernel(source: "componentMultiply")!
+    nonisolated(unsafe) public static let componentMultiply = CIBlendKernel(builtInName: "componentMultiply")
 
     /// Component min blend kernel.
-    nonisolated(unsafe) public static let componentMin = CIBlendKernel(source: "componentMin")!
+    nonisolated(unsafe) public static let componentMin = CIBlendKernel(builtInName: "componentMin")
 
     /// Component max blend kernel.
-    nonisolated(unsafe) public static let componentMax = CIBlendKernel(source: "componentMax")!
+    nonisolated(unsafe) public static let componentMax = CIBlendKernel(builtInName: "componentMax")
 
     /// Linear burn blend kernel.
-    nonisolated(unsafe) public static let linearBurn = CIBlendKernel(source: "linearBurn")!
+    nonisolated(unsafe) public static let linearBurn = CIBlendKernel(builtInName: "linearBurn")
 
     /// Linear dodge blend kernel.
-    nonisolated(unsafe) public static let linearDodge = CIBlendKernel(source: "linearDodge")!
+    nonisolated(unsafe) public static let linearDodge = CIBlendKernel(builtInName: "linearDodge")
 
     /// Linear light blend kernel.
-    nonisolated(unsafe) public static let linearLight = CIBlendKernel(source: "linearLight")!
+    nonisolated(unsafe) public static let linearLight = CIBlendKernel(builtInName: "linearLight")
 
     /// Pin light blend kernel.
-    nonisolated(unsafe) public static let pinLight = CIBlendKernel(source: "pinLight")!
+    nonisolated(unsafe) public static let pinLight = CIBlendKernel(builtInName: "pinLight")
 
     /// Vivid light blend kernel.
-    nonisolated(unsafe) public static let vividLight = CIBlendKernel(source: "vividLight")!
+    nonisolated(unsafe) public static let vividLight = CIBlendKernel(builtInName: "vividLight")
 
     /// Hard mix blend kernel.
-    nonisolated(unsafe) public static let hardMix = CIBlendKernel(source: "hardMix")!
+    nonisolated(unsafe) public static let hardMix = CIBlendKernel(builtInName: "hardMix")
 
     /// Darker color blend kernel.
-    nonisolated(unsafe) public static let darkerColor = CIBlendKernel(source: "darkerColor")!
+    nonisolated(unsafe) public static let darkerColor = CIBlendKernel(builtInName: "darkerColor")
 
     /// Lighter color blend kernel.
-    nonisolated(unsafe) public static let lighterColor = CIBlendKernel(source: "lighterColor")!
+    nonisolated(unsafe) public static let lighterColor = CIBlendKernel(builtInName: "lighterColor")
 
     /// Subtract blend kernel.
-    nonisolated(unsafe) public static let subtract = CIBlendKernel(source: "subtract")!
+    nonisolated(unsafe) public static let subtract = CIBlendKernel(builtInName: "subtract")
 
     /// Divide blend kernel.
-    nonisolated(unsafe) public static let divide = CIBlendKernel(source: "divide")!
+    nonisolated(unsafe) public static let divide = CIBlendKernel(builtInName: "divide")
 }
 
 // MARK: - CISampler

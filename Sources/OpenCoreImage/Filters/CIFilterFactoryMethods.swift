@@ -4,10 +4,6 @@
 //
 //  Factory methods for creating Core Image filters.
 //
-//  ---------------------------------------------------------------------------
-//  TODO: Protocol-conformance coverage
-//  ---------------------------------------------------------------------------
-//
 //  Each factory method below downcasts a `CIFilter` instance to
 //  `(any CIFilter & CISomeProtocol)`. That cast succeeds only when `CIFilter`
 //  itself conforms to the per-filter protocol. Conformance is declared in
@@ -17,13 +13,10 @@
 //    CIMedian, CINoiseReduction, CIColorControls, CIHueAdjust,
 //    CISepiaTone, CIVignette, CIBloom, CIEdgeWork, CICrystallize, CIPixellate.
 //
-//  The remaining ~165 per-filter protocols defined under Filters/*.swift do
-//  NOT yet have matching `extension CIFilter: ...` conformances, so their
-//  factory methods below still return `nil` from the `as?` downcast. They are
-//  left in place (rather than deleted) to document the intended API shape and
-//  to make the work of adding conformances mechanical: add the extension in
-//  `CIFilterProtocolConformances.swift` and the corresponding factory will
-//  start returning a configured filter.
+//  The remaining per-filter protocols defined under Filters/*.swift do not
+//  yet have matching `extension CIFilter: ...` conformances, so their failable
+//  factory methods return `nil`. String-based creation is independently gated
+//  by the executable WGSL registry.
 //
 //  When adding a new conformance:
 //    1. Implement each property in terms of `_inputValues[...]` with the
@@ -47,17 +40,17 @@ extension CIFilter {
 
     /// Applies a square-shaped blur to an area of an image.
     public class func boxBlur() -> (any CIFilter & CIBoxBlur)? {
-        CIFilter(name: "CIBoxBlur") as? (any CIFilter & CIBoxBlur)
+        CIFilter(name: "CIBoxBlur")
     }
 
     /// Applies a circle-shaped blur to an area of an image.
     public class func discBlur() -> (any CIFilter & CIDiscBlur)? {
-        CIFilter(name: "CIDiscBlur") as? (any CIFilter & CIDiscBlur)
+        CIFilter(name: "CIDiscBlur")
     }
 
     /// Blurs an image with a Gaussian distribution pattern.
     public class func gaussianBlur() -> (any CIFilter & CIGaussianBlur)? {
-        CIFilter(name: "CIGaussianBlur") as? (any CIFilter & CIGaussianBlur)
+        CIFilter(name: "CIGaussianBlur")
     }
 
     /// Blurs a specified portion of an image.
@@ -67,7 +60,7 @@ extension CIFilter {
 
     /// Calculates the median of an image to refine detail.
     public class func median() -> (any CIFilter & CIMedian)? {
-        CIFilter(name: "CIMedianFilter") as? (any CIFilter & CIMedian)
+        CIFilter(name: "CIMedianFilter")
     }
 
     /// Detects and highlights edges of objects.
@@ -97,17 +90,17 @@ extension CIFilter {
 
     /// Creates motion blur on an image.
     public class func motionBlur() -> (any CIFilter & CIMotionBlur)? {
-        CIFilter(name: "CIMotionBlur") as? (any CIFilter & CIMotionBlur)
+        CIFilter(name: "CIMotionBlur")
     }
 
     /// Reduces noise by sharpening the edges of objects.
     public class func noiseReduction() -> (any CIFilter & CINoiseReduction)? {
-        CIFilter(name: "CINoiseReduction") as? (any CIFilter & CINoiseReduction)
+        CIFilter(name: "CINoiseReduction")
     }
 
     /// Creates a zoom blur centered around a single point on the image.
     public class func zoomBlur() -> (any CIFilter & CIZoomBlur)? {
-        CIFilter(name: "CIZoomBlur") as? (any CIFilter & CIZoomBlur)
+        CIFilter(name: "CIZoomBlur")
     }
 
     // MARK: - Color Adjustment Filters
@@ -124,7 +117,7 @@ extension CIFilter {
 
     /// Alters the brightness, contrast, and saturation of an image's colors.
     public class func colorControls() -> (any CIFilter & CIColorControls)? {
-        CIFilter(name: "CIColorControls") as? (any CIFilter & CIColorControls)
+        CIFilter(name: "CIColorControls")
     }
 
     /// Alters the colors in an image based on vectors provided.
@@ -169,7 +162,7 @@ extension CIFilter {
 
     /// Modifies an image's hue.
     public class func hueAdjust() -> (any CIFilter & CIHueAdjust)? {
-        CIFilter(name: "CIHueAdjust") as? (any CIFilter & CIHueAdjust)
+        CIFilter(name: "CIHueAdjust")
     }
 
     /// Alters an image's color intensity.
@@ -346,7 +339,7 @@ extension CIFilter {
 
     /// Adjusts an image's colors to shades of brown.
     public class func sepiaTone() -> (any CIFilter & CISepiaTone)? {
-        CIFilter(name: "CISepiaTone") as? (any CIFilter & CISepiaTone)
+        CIFilter(name: "CISepiaTone")
     }
 
     /// Alters the image to make it look like it was taken by a thermal camera.
@@ -356,7 +349,7 @@ extension CIFilter {
 
     /// Gradually darkens an image's edges.
     public class func vignette() -> (any CIFilter & CIVignette)? {
-        CIFilter(name: "CIVignette") as? (any CIFilter & CIVignette)
+        CIFilter(name: "CIVignette")
     }
 
     /// Gradually darkens a specified area of an image.
@@ -961,7 +954,7 @@ extension CIFilter {
 
     /// Adjusts an image's colors by applying a blur effect.
     public class func bloom() -> (any CIFilter & CIBloom)? {
-        CIFilter(name: "CIBloom") as? (any CIFilter & CIBloom)
+        CIFilter(name: "CIBloom")
     }
 
     /// Applies the Canny edge-detection algorithm to an image.
@@ -981,7 +974,7 @@ extension CIFilter {
 
     /// Creates an image made with a series of colorful polygons.
     public class func crystallize() -> (any CIFilter & CICrystallize)? {
-        CIFilter(name: "CICrystallize") as? (any CIFilter & CICrystallize)
+        CIFilter(name: "CICrystallize")
     }
 
     /// Simulates a depth of field effect.
@@ -996,7 +989,7 @@ extension CIFilter {
 
     /// Produces a black-and-white image that looks similar to a woodblock print.
     public class func edgeWork() -> (any CIFilter & CIEdgeWork)? {
-        CIFilter(name: "CIEdgeWork") as? (any CIFilter & CIEdgeWork)
+        CIFilter(name: "CIEdgeWork")
     }
 
     /// Highlights textures in an image.
@@ -1041,7 +1034,7 @@ extension CIFilter {
 
     /// Enlarges the colors of the pixels to create a blurred effect.
     public class func pixellate() -> (any CIFilter & CIPixellate)? {
-        CIFilter(name: "CIPixellate") as? (any CIFilter & CIPixellate)
+        CIFilter(name: "CIPixellate")
     }
 
     /// Applies a pointillize effect to an image.

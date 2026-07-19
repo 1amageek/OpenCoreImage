@@ -181,13 +181,15 @@ struct CIFilterRegistrationTests {
     @Test("Filter names in categories")
     func filterNamesInCategories() {
         let names = CIFilter.filterNames(inCategories: nil)
-        #expect(!names.isEmpty || names.isEmpty) // Verify it returns a valid array
+        #expect(names.contains("CIGaussianBlur"))
+        #expect(names.contains("CIBokehBlur") == false)
     }
 
     @Test("Filter names in category")
     func filterNamesInCategory() {
         let names = CIFilter.filterNames(inCategory: kCICategoryBlur)
-        #expect(!names.isEmpty || names.isEmpty) // Verify it returns a valid array
+        #expect(names.contains("CIGaussianBlur"))
+        #expect(names.contains("CIBokehBlur") == false)
     }
 
     @Test("Register custom filter")
@@ -334,12 +336,9 @@ struct CIFilterProtocolTests {
 @Suite("CIFilter Apply Kernel")
 struct CIFilterApplyKernelTests {
 
-    @Test("Apply kernel returns nil placeholder")
+    @Test("Unsupported custom kernel is rejected before apply")
     func applyKernelReturnsNil() {
-        let filter = CIFilter(name: "CIGaussianBlur")!
-        let kernel = CIKernel(source: "test")!
-        let result = filter.apply(kernel, arguments: nil, options: nil)
-        #expect(result == nil)  // Placeholder implementation
+        #expect(CIKernel(source: "test") == nil)
     }
 }
 
@@ -460,6 +459,11 @@ struct CIFilterBuiltInNameGatingTests {
         #expect(filter != nil)
     }
 
+    @Test("Filter without a rendering implementation is unavailable")
+    func unsupportedBuiltInReturnsNil() {
+        #expect(CIFilter(name: "CIBokehBlur") == nil)
+    }
+
     @Test("Non-existent filter name returns nil")
     func nonExistentFilterReturnsNil() {
         let filter = CIFilter(name: "CINonExistentFilterXYZ")
@@ -574,5 +578,82 @@ struct CIRAWFilterURLLoadingTests {
         let url = URL(fileURLWithPath: "/nonexistent/path.cr2")
         let filter = CIRAWFilter(imageURL: url)
         #expect(filter == nil)
+    }
+
+    @Test("CIRAWFilter rejects a TIFF header without a CFA image")
+    func ciRawFilterRejectsIncompleteTIFF() {
+        let data = Data([0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00])
+        #expect(CIRAWFilter(imageData: data, identifierHint: "public.tiff") == nil)
+    }
+
+    @Test("CIRAWFilter decodes an uncompressed CFA strip")
+    func ciRawFilterDecodesUncompressedCFAStrip() throws {
+        let data = makeUncompressedCFATIFF(width: 4, height: 4)
+        let filter = try #require(CIRAWFilter(imageData: data, identifierHint: "com.adobe.raw-image"))
+
+        #expect(filter.nativeSize == CGSize(width: 4, height: 4))
+        #expect(filter.isContrastSupported)
+        #expect(filter.isLocalToneMapSupported == false)
+        #expect(filter.isMoireReductionSupported == false)
+        #expect(filter.isHighlightRecoverySupported == false)
+        #expect(CIRAWFilter.supportedCameraModels.isEmpty)
+
+        let output = try #require(filter.outputImage)
+        #expect(output.extent == CGRect(x: 0, y: 0, width: 4, height: 4))
+        #expect(output._pixelData?.count == 4 * 4 * 4)
+    }
+
+    private func makeUncompressedCFATIFF(width: UInt16, height: UInt16) -> Data {
+        let entryCount: UInt16 = 10
+        let ifdOffset: UInt32 = 8
+        let pixelOffset = UInt32(8 + 2 + Int(entryCount) * 12 + 4)
+        let pixelCount = UInt32(width) * UInt32(height)
+        var data = Data()
+
+        data.append(contentsOf: [0x49, 0x49])
+        appendUInt16(42, to: &data)
+        appendUInt32(ifdOffset, to: &data)
+        appendUInt16(entryCount, to: &data)
+        appendEntry(tag: 256, type: 3, count: 1, value: UInt32(width), to: &data)
+        appendEntry(tag: 257, type: 3, count: 1, value: UInt32(height), to: &data)
+        appendEntry(tag: 258, type: 3, count: 1, value: 8, to: &data)
+        appendEntry(tag: 259, type: 3, count: 1, value: 1, to: &data)
+        appendEntry(tag: 262, type: 3, count: 1, value: 32803, to: &data)
+        appendEntry(tag: 273, type: 4, count: 1, value: pixelOffset, to: &data)
+        appendEntry(tag: 277, type: 3, count: 1, value: 1, to: &data)
+        appendEntry(tag: 279, type: 4, count: 1, value: pixelCount, to: &data)
+        appendEntry(tag: 33421, type: 3, count: 2, value: 0x0002_0002, to: &data)
+        appendEntry(tag: 33422, type: 1, count: 4, value: 0x0201_0100, to: &data)
+        appendUInt32(0, to: &data)
+
+        for index in 0..<pixelCount {
+            data.append(UInt8(truncatingIfNeeded: index * 16))
+        }
+        return data
+    }
+
+    private func appendEntry(
+        tag: UInt16,
+        type: UInt16,
+        count: UInt32,
+        value: UInt32,
+        to data: inout Data
+    ) {
+        appendUInt16(tag, to: &data)
+        appendUInt16(type, to: &data)
+        appendUInt32(count, to: &data)
+        appendUInt32(value, to: &data)
+    }
+
+    private func appendUInt16(_ value: UInt16, to data: inout Data) {
+        data.append(UInt8(truncatingIfNeeded: value))
+        data.append(UInt8(truncatingIfNeeded: value >> 8))
+    }
+
+    private func appendUInt32(_ value: UInt32, to data: inout Data) {
+        data.append(UInt8(truncatingIfNeeded: value))
+        data.append(UInt8(truncatingIfNeeded: value >> 8))
+        data.append(UInt8(truncatingIfNeeded: value >> 16))
+        data.append(UInt8(truncatingIfNeeded: value >> 24))
     }
 }
