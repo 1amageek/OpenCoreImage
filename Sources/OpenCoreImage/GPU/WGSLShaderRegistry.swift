@@ -30,6 +30,17 @@ internal struct WGSLShaderRegistry {
         Array(shaders.keys)
     }
 
+    /// Transition filters whose binding layout accepts source, target, output, and uniforms.
+    static let transitionFilterNames: Set<String> = [
+        "CIDissolveTransition",
+        "CISwipeTransition",
+        "CIBarsSwipeTransition",
+        "CIModTransition",
+        "CIFlashTransition",
+        "CICopyMachineTransition",
+        "CIRippleTransition",
+    ]
+
     // MARK: - Shader Registry
 
     private static let shaders: [String: String] = [

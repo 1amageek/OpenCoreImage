@@ -56,6 +56,25 @@ struct WGSLShaderRegistryLookupTests {
     }
 }
 
+@Suite("WGSLShaderRegistry Transition Filters")
+struct WGSLShaderRegistryTransitionFilterTests {
+    @Test("Executable transition registry matches the shared binding-layout set")
+    func transitionRegistryMatchesBindingLayoutSet() {
+        #expect(WGSLShaderRegistry.transitionFilterNames == [
+            "CIDissolveTransition",
+            "CISwipeTransition",
+            "CIBarsSwipeTransition",
+            "CIModTransition",
+            "CIFlashTransition",
+            "CICopyMachineTransition",
+            "CIRippleTransition",
+        ])
+        for name in WGSLShaderRegistry.transitionFilterNames {
+            #expect(WGSLShaderRegistry.hasShader(for: name))
+        }
+    }
+}
+
 // MARK: - Blur Filter Shaders Tests
 
 @Suite("WGSLShaderRegistry Blur Filters")

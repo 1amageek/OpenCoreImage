@@ -526,6 +526,10 @@ internal actor FilterGraphCompiler {
     }
 
     private func getFilterCategory(_ filterName: String) -> FilterCategory {
+        if WGSLShaderRegistry.transitionFilterNames.contains(filterName) {
+            return .transition
+        }
+
         switch filterName {
         // Compositing filters (Porter-Duff and blend modes)
         case "CISourceOverCompositing", "CISourceAtopCompositing",
@@ -550,13 +554,6 @@ internal actor FilterGraphCompiler {
              // Mix filter (also uses 2 textures)
              "CIMix":
             return .compositing
-
-        // Transition filters
-        case "CIDissolveTransition", "CISwipeTransition",
-             "CIBarsSwipeTransition", "CIModTransition",
-             "CIFlashTransition", "CICopyMachineTransition",
-             "CIRippleTransition":
-            return .transition
 
         // Generator filters
         case "CIConstantColorGenerator", "CICheckerboardGenerator",
