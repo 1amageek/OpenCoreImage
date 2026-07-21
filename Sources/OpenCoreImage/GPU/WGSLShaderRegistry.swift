@@ -2074,11 +2074,13 @@ internal struct WGSLShaderRegistry {
         let fg = textureLoad(foregroundTexture, coords, 0);
         let bg = textureLoad(backgroundTexture, coords, 0);
 
-        // Porter-Duff source-over: Cs * As + Cd * (1 - As)
-        let result = vec4<f32>(
-            fg.rgb * fg.a + bg.rgb * (1.0 - fg.a),
-            fg.a + bg.a * (1.0 - fg.a)
-        );
+        let alpha = fg.a + bg.a * (1.0 - fg.a);
+        let premultiplied = fg.rgb * fg.a + bg.rgb * bg.a * (1.0 - fg.a);
+        var rgb = vec3<f32>(0.0);
+        if (alpha > 0.00001) {
+            rgb = premultiplied / alpha;
+        }
+        let result = vec4<f32>(rgb, alpha);
 
         textureStore(outputTexture, coords, result);
     }
@@ -2103,9 +2105,15 @@ internal struct WGSLShaderRegistry {
         let fg = textureLoad(foregroundTexture, coords, 0);
         let bg = textureLoad(backgroundTexture, coords, 0);
 
-        // Multiply blend: Cs * Cd
-        let rgb = fg.rgb * bg.rgb;
+        let blended = fg.rgb * bg.rgb;
         let alpha = fg.a + bg.a * (1.0 - fg.a);
+        let premultiplied = fg.rgb * fg.a * (1.0 - bg.a)
+            + bg.rgb * bg.a * (1.0 - fg.a)
+            + blended * fg.a * bg.a;
+        var rgb = vec3<f32>(0.0);
+        if (alpha > 0.00001) {
+            rgb = premultiplied / alpha;
+        }
         textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
     }
     """
@@ -2129,9 +2137,15 @@ internal struct WGSLShaderRegistry {
         let fg = textureLoad(foregroundTexture, coords, 0);
         let bg = textureLoad(backgroundTexture, coords, 0);
 
-        // Screen blend: 1 - (1 - Cs) * (1 - Cd)
-        let rgb = 1.0 - (1.0 - fg.rgb) * (1.0 - bg.rgb);
+        let blended = 1.0 - (1.0 - fg.rgb) * (1.0 - bg.rgb);
         let alpha = fg.a + bg.a * (1.0 - fg.a);
+        let premultiplied = fg.rgb * fg.a * (1.0 - bg.a)
+            + bg.rgb * bg.a * (1.0 - fg.a)
+            + blended * fg.a * bg.a;
+        var rgb = vec3<f32>(0.0);
+        if (alpha > 0.00001) {
+            rgb = premultiplied / alpha;
+        }
         textureStore(outputTexture, coords, vec4<f32>(rgb, alpha));
     }
     """

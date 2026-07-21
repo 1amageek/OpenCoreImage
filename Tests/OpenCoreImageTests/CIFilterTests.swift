@@ -377,6 +377,21 @@ struct CIFilterCommonFiltersTests {
         #expect(filter != nil)
     }
 
+    @Test("Every registered compositing filter is constructible")
+    func createRegisteredCompositingFilters() {
+        let names = [
+            "CIDarkenCompositing",
+            "CIDifferenceCompositing",
+            "CILightenCompositing",
+            "CIOverlayCompositing",
+            "CIScreenCompositing",
+            "CISubtractCompositing",
+        ]
+        for name in names {
+            #expect(CIFilter(name: name) != nil, "Missing constructible filter: \(name)")
+        }
+    }
+
     @Test("Create Linear gradient filter")
     func createLinearGradient() {
         let filter = CIFilter(name: "CILinearGradient")

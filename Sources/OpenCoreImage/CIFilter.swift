@@ -529,9 +529,11 @@ public class CIFilter {
         "CIDarkenBlendMode", "CIDifferenceBlendMode", "CIDivideBlendMode", "CIExclusionBlendMode",
         "CIHardLightBlendMode", "CIHueBlendMode", "CILightenBlendMode", "CILinearBurnBlendMode",
         "CILinearDodgeBlendMode", "CILinearLightBlendMode", "CILuminosityBlendMode",
+        "CIDarkenCompositing", "CIDifferenceCompositing", "CILightenCompositing",
         "CIMinimumCompositing", "CIMaximumCompositing", "CIMultiplyBlendMode",
-        "CIMultiplyCompositing", "CIOverlayBlendMode", "CIPinLightBlendMode",
+        "CIMultiplyCompositing", "CIOverlayBlendMode", "CIOverlayCompositing", "CIPinLightBlendMode",
         "CISaturationBlendMode", "CIScreenBlendMode", "CISoftLightBlendMode",
+        "CIScreenCompositing", "CISubtractCompositing",
         "CISourceAtopCompositing", "CISourceInCompositing", "CISourceOutCompositing",
         "CISourceOverCompositing", "CISubtractBlendMode", "CIVividLightBlendMode",
         // Convolution
