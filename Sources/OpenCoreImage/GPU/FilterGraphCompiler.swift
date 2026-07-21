@@ -292,7 +292,7 @@ internal actor FilterGraphCompiler {
             uniformBuffers.append(uniformBuffer)
 
             // Create bind group based on filter category
-            let category = getFilterCategory(filter.name)
+            let category = Self.category(for: filter.name)
             let bindGroup = createBindGroupForCategory(
                 category: category,
                 device: device,
@@ -525,7 +525,7 @@ internal actor FilterGraphCompiler {
         }
     }
 
-    private func getFilterCategory(_ filterName: String) -> FilterCategory {
+    nonisolated static func category(for filterName: String) -> FilterCategory {
         if WGSLShaderRegistry.transitionFilterNames.contains(filterName) {
             return .transition
         }
