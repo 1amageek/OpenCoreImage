@@ -20,7 +20,10 @@ public enum CIWebGPUFilterError: Error, Equatable {
     case invalidatedExecution
 }
 
-/// A reusable filter dispatch bound to externally owned input textures.
+/// A reusable filter dispatch bound to externally owned straight-alpha input textures.
+///
+/// The output texture also contains straight-alpha RGBA values. External compositors that
+/// store premultiplied pixels must explicitly convert at this boundary.
 @MainActor
 @_spi(WebGPUInterop)
 public final class CIWebGPUFilterExecution {
@@ -171,7 +174,7 @@ public final class CIWebGPUFilterProcessor {
         }
     }
 
-    /// Binds a supported filter to one or two equally sized external textures.
+    /// Binds a supported filter to one or two equally sized straight-alpha external textures.
     public func makeExecution(
         filter: CIFilter,
         inputMode: CIWebGPUFilterInputMode,
