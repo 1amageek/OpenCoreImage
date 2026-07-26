@@ -14,7 +14,7 @@ import JavaScriptKit
 /// This engine attempts to use browser's FaceDetector and BarcodeDetector APIs
 /// for better detection accuracy. Falls back to pure Swift implementation when
 /// browser APIs are not available.
-internal final class CIWebAPIDetectorEngine: CIDetectorEngine, @unchecked Sendable {
+internal final class CIWebAPIDetectorEngine: CIDetectorEngine {
 
     // MARK: - Properties
 

@@ -52,6 +52,9 @@ public func CGColorSpaceCreateDeviceCMYK() -> CGColorSpace {
 ///
 /// On Apple platforms, this would be `CVPixelBuffer` from CoreVideo.
 /// In WASM, this is a placeholder type for API compatibility.
+// FIXME(INCOMPLETE_IMPLEMENTATION): This compatibility value carries dimensions and format but no pixel storage or access coordination.
+// CIImage(cvPixelBuffer:) reaches this type and must not be treated as having renderable pixels.
+// Remove this marker only after integration with the portable Core Video owner/lease contract and zero-copy behavior tests.
 public struct CVPixelBuffer: Sendable {
     /// The width of the pixel buffer.
     public let width: Int
@@ -74,7 +77,10 @@ public struct CVPixelBuffer: Sendable {
 ///
 /// On Apple platforms, this would be `AVDepthData` from AVFoundation.
 /// In WASM, this is a placeholder type for API compatibility.
-public struct AVDepthData: Sendable {
+// FIXME(INCOMPLETE_IMPLEMENTATION): This compatibility value does not implement AVDepthData calibration, conversion, or ownership semantics.
+// CIImage(depthData:) reaches this type and currently carries only an optional image reference.
+// Remove this marker only after portable depth metadata, pixel ownership, conversion, and failure behavior are tested.
+public struct AVDepthData {
     /// The depth data as a CIImage.
     public let depthDataMap: CIImage?
 
@@ -92,7 +98,10 @@ public struct AVDepthData: Sendable {
 ///
 /// On Apple platforms, this would be `AVPortraitEffectsMatte` from AVFoundation.
 /// In WASM, this is a placeholder type for API compatibility.
-public struct AVPortraitEffectsMatte: Sendable {
+// FIXME(INCOMPLETE_IMPLEMENTATION): This compatibility value does not implement matte metadata, pixel ownership, or format conversion.
+// CIImage(portraitEffectsMatte:) reaches this type and currently carries only an optional image reference.
+// Remove this marker only after the portable media matte contract and success/failure behavior are tested.
+public struct AVPortraitEffectsMatte {
     /// The matte image.
     public let mattingImage: CIImage?
 
@@ -130,7 +139,10 @@ public struct AVSemanticSegmentationMatteType: RawRepresentable, Equatable, Hash
 ///
 /// On Apple platforms, this would be `AVSemanticSegmentationMatte` from AVFoundation.
 /// In WASM, this is a placeholder type for API compatibility.
-public struct AVSemanticSegmentationMatte: Sendable {
+// FIXME(INCOMPLETE_IMPLEMENTATION): This compatibility value does not implement matte metadata, pixel ownership, or format conversion.
+// CIImage(semanticSegmentationMatte:) reaches this type and currently carries only type and optional image references.
+// Remove this marker only after the portable media matte contract and success/failure behavior are tested.
+public struct AVSemanticSegmentationMatte {
     /// The matte type.
     public let matteType: AVSemanticSegmentationMatteType
 

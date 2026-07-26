@@ -13,7 +13,7 @@
 /// - `CIWebAPIDetectorEngine`: WASM-specific implementation using browser APIs
 ///
 /// This follows the Renderer Delegate pattern used by `CIContextRenderer`.
-internal protocol CIDetectorEngine: Sendable {
+internal protocol CIDetectorEngine {
 
     /// Synchronous feature detection using pure Swift implementation.
     ///

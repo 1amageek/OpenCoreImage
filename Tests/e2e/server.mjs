@@ -72,7 +72,7 @@ async function preflight() {
             `  Build it first:\n` +
             `    ./build.sh\n` +
             `  (or manually: cd ../../Examples/SmokeTest && \\\n` +
-            `    swift build --product OCISmoke --swift-sdk swift-6.3.1-RELEASE_wasm -c release && \\\n` +
+            `    TOOLCHAINS=org.swift.64202607171a xcrun swift build --product OCISmoke --swift-sdk swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-17-a_wasm -c release && \\\n` +
             `    cp .build/wasm32-unknown-wasip1/release/OCISmoke.wasm web/)\n`
         );
         process.exit(1);

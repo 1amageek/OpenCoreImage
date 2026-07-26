@@ -24,7 +24,7 @@ public enum CIRenderDestinationAlphaMode: UInt, Sendable, Hashable {
 
 /// A specification for configuring all attributes of a render task's destination
 /// and issuing asynchronous render tasks.
-public final class CIRenderDestination: @unchecked Sendable {
+public final class CIRenderDestination {
 
     // MARK: - Private Storage
 
@@ -41,6 +41,9 @@ public final class CIRenderDestination: @unchecked Sendable {
     // MARK: - Initialization
 
     /// Creates a render destination with the specified dimensions.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Command-buffer and texture-provider destinations are not retained or submitted by the portable renderer.
+    // Applications can construct this destination, but task execution must remain unavailable until the backend resource is owned and validated.
+    // Remove this marker only after provider invocation, pixel-format validation, submission, completion, and failure tests exist.
     public init(width: Int, height: Int, pixelFormat: CIFormat, commandBuffer: Any?, mtlTextureProvider: (() -> Any?)?) {
         self._width = width
         self._height = height
@@ -54,6 +57,9 @@ public final class CIRenderDestination: @unchecked Sendable {
     }
 
     /// Creates a render destination backed by a bitmap context.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Bitmap destination memory, stride, and format are not retained by a render submission.
+    // Applications can construct this destination, but task execution must remain unavailable rather than claiming writes to the supplied buffer.
+    // Remove this marker only after scoped buffer ownership, stride validation, rendering, completion, and failure tests exist.
     public init(bitmapData data: UnsafeMutableRawPointer, width: Int, height: Int, bytesPerRow: Int, format: CIFormat) {
         self._width = width
         self._height = height
@@ -67,6 +73,9 @@ public final class CIRenderDestination: @unchecked Sendable {
     }
 
     /// Creates a render destination backed by an IOSurface.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): IOSurface-backed destinations are not supported by the portable renderer.
+    // Applications can construct this compatibility object, but no render task may report success for the unowned surface.
+    // Remove this marker only after a typed surface contract, dimensions, ownership, rendering, and failure tests exist.
     public init(ioSurface: Any) {
         self._width = 0
         self._height = 0
@@ -80,6 +89,9 @@ public final class CIRenderDestination: @unchecked Sendable {
     }
 
     /// Creates a render destination backed by a CGLayer.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): OpenGL texture destinations are not supported by the portable renderer.
+    // Applications can construct this compatibility object, but no render task may report success for the unowned texture.
+    // Remove this marker only after a typed texture contract, ownership, rendering, and failure tests exist.
     public init(glTexture: UInt32, target: UInt32, width: Int, height: Int) {
         self._width = width
         self._height = height
@@ -166,7 +178,7 @@ extension CIRenderDestination: Hashable {
 // MARK: - CIRenderInfo
 
 /// An encapsulation of a render task's timing, passes, and pixels processed.
-public final class CIRenderInfo: @unchecked Sendable {
+public final class CIRenderInfo: Sendable {
 
     // MARK: - Private Storage
 
@@ -201,6 +213,9 @@ public final class CIRenderInfo: @unchecked Sendable {
 
     /// The time spent compiling shaders, in seconds.
     public var kernelCompileTime: TimeInterval {
+        // FIXME(INCOMPLETE_IMPLEMENTATION): CIRenderInfo does not yet retain measured shader compilation time.
+        // Completed render tasks would expose this property, so zero must not be interpreted as a measured production value.
+        // Remove this marker only after the submission records compile timing and behavior tests validate cached and uncached paths.
         0
     }
 }
@@ -224,18 +239,16 @@ extension CIRenderInfo: Hashable {
 // MARK: - CIRenderTask
 
 /// A single render task.
-public final class CIRenderTask: @unchecked Sendable {
+public final class CIRenderTask {
 
     // MARK: - Private Storage
 
     private let _destination: CIRenderDestination
-    private var _renderInfo: CIRenderInfo?
 
     // MARK: - Initialization
 
     internal init(destination: CIRenderDestination) {
         self._destination = destination
-        self._renderInfo = nil
     }
 
     // MARK: - Properties
@@ -249,13 +262,10 @@ public final class CIRenderTask: @unchecked Sendable {
 
     /// Waits for the task to complete and returns the render info.
     public func waitUntilCompleted() throws -> CIRenderInfo {
-        // Placeholder implementation
-        if let info = _renderInfo {
-            return info
-        }
-        let info = CIRenderInfo(kernelExecutionTime: 0, passCount: 1, pixelsProcessed: _destination.width * _destination.height)
-        _renderInfo = info
-        return info
+        // FIXME(INCOMPLETE_IMPLEMENTATION): CIRenderTask is not connected to a renderer submission or completion signal.
+        // Directly constructed tasks reach this method in the current compatibility API and must not report fabricated timing or pixel counts.
+        // Remove this marker only after task creation owns a real submission, propagates backend failure, and tests observed completion metadata.
+        throw CIError.notImplemented
     }
 }
 

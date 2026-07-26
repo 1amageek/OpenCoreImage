@@ -56,7 +56,7 @@ internal struct CompiledFilterGraph {
 }
 
 /// Compiles CIImage filter graphs (DAG) into GPU execution plans.
-internal actor FilterGraphCompiler {
+internal final class FilterGraphCompiler: Sendable {
 
     // MARK: - Singleton
 
@@ -115,7 +115,7 @@ internal actor FilterGraphCompiler {
     ///   - device: The GPU device to create resources on.
     /// - Throws: GPUError if compilation fails.
     /// - Returns: A compiled filter graph ready for execution.
-    func compile(
+    nonisolated(nonsending) func compile(
         image: CIImage,
         outputRect: CGRect,
         device: GPUDevice
@@ -150,7 +150,7 @@ internal actor FilterGraphCompiler {
 
     // MARK: - DAG Compilation
 
-    private func compileDAG(
+    private nonisolated(nonsending) func compileDAG(
         filterGraph: FilterGraph,
         width: UInt32,
         height: UInt32,
@@ -224,13 +224,19 @@ internal actor FilterGraphCompiler {
             // Copy to local array to avoid capture issues
             let texturesToRelease = textures
             for texture in texturesToRelease {
-                await GPUTexturePool.shared.release(texture, width: width, height: height, format: .rgba8unorm)
+                await GPUTexturePool.shared.release(
+                    texture,
+                    device: device,
+                    width: width,
+                    height: height,
+                    format: .rgba8unorm
+                )
             }
             throw error
         }
     }
 
-    private func compileFilterNode(
+    private nonisolated(nonsending) func compileFilterNode(
         node: FilterGraphNode,
         nodeToTextureIndex: [Int: Int],
         textures: inout [GPUTexture],
@@ -588,7 +594,7 @@ internal actor FilterGraphCompiler {
 
     // MARK: - Pass-Through
 
-    private func compilePassThrough(
+    private nonisolated(nonsending) func compilePassThrough(
         width: UInt32,
         height: UInt32,
         device: GPUDevice,

@@ -27,7 +27,7 @@ public let CIFeatureTypeText: String = "CIFeatureTypeText"
 /// A `CIFeature` object represents a portion of an image that a detector believes matches
 /// its criteria. Subclasses of CIFeature holds additional information specific to the
 /// detector that discovered the feature.
-public class CIFeature: @unchecked Sendable {
+public class CIFeature {
 
     // MARK: - Private Storage
 
@@ -77,7 +77,7 @@ extension CIFeature: Hashable {
 /// The properties of a `CIFaceFeature` object provide information about the face's eyes
 /// and mouth. A face object in a video can also have properties that track its location
 /// over time, tracking ID and frame count.
-public final class CIFaceFeature: CIFeature, @unchecked Sendable {
+public final class CIFaceFeature: CIFeature {
 
     // MARK: - Private Storage
 
@@ -234,7 +234,7 @@ public final class CIFaceFeature: CIFeature, @unchecked Sendable {
 /// rather, the feature identifies a shape that may be rectangular in space (for example
 /// a book on a desk) but which appears as a four-sided polygon in the image. The properties
 /// of a `CIRectangleFeature` object identify its four corners in image coordinates.
-public final class CIRectangleFeature: CIFeature, @unchecked Sendable {
+public final class CIRectangleFeature: CIFeature {
 
     // MARK: - Private Storage
 
@@ -284,7 +284,7 @@ public final class CIRectangleFeature: CIFeature, @unchecked Sendable {
 /// rather, the feature identifies a shape that may be rectangular in space (for example
 /// a text on a sign) but which appears as a four-sided polygon in the image. The properties
 /// of a `CITextFeature` object identify its four corners in image coordinates.
-public final class CITextFeature: CIFeature, @unchecked Sendable {
+public final class CITextFeature: CIFeature {
 
     // MARK: - Private Storage
 
@@ -346,7 +346,7 @@ public final class CITextFeature: CIFeature, @unchecked Sendable {
 /// A QR code is a two-dimensional barcode using the ISO/IEC 18004:2006 standard.
 /// The properties of a CIQRCodeFeature object identify the corners of the barcode
 /// in the image perspective and provide the decoded message.
-public final class CIQRCodeFeature: CIFeature, @unchecked Sendable {
+public final class CIQRCodeFeature: CIFeature {
 
     // MARK: - Private Storage
 

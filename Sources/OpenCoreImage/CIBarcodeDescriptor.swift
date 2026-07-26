@@ -13,7 +13,7 @@
 /// Subclasses encapsulate the formal specification and fields specific to a code type.
 /// Each subclass is sufficient to recreate the unique symbol exactly as seen or used
 /// with a custom parser.
-public class CIBarcodeDescriptor: @unchecked Sendable {
+public class CIBarcodeDescriptor {
 
     // MARK: - Initialization
 
@@ -43,7 +43,7 @@ extension CIBarcodeDescriptor: Hashable {
 /// ISO/IEC 18004 defines versions from 1 to 40, where a higher symbol version indicates
 /// a larger data-carrying capacity. QR Codes can encode text, vCard contact information,
 /// or Uniform Resource Identifiers (URI).
-public final class CIQRCodeDescriptor: CIBarcodeDescriptor, @unchecked Sendable {
+public final class CIQRCodeDescriptor: CIBarcodeDescriptor {
 
     // MARK: - Error Correction Level
 
@@ -109,7 +109,7 @@ public final class CIQRCodeDescriptor: CIBarcodeDescriptor, @unchecked Sendable 
 ///
 /// An Aztec code symbol is a 2D barcode format defined by the ISO/IEC 24778:2008 standard.
 /// It encodes data in concentric square rings around a central bullseye pattern.
-public final class CIAztecCodeDescriptor: CIBarcodeDescriptor, @unchecked Sendable {
+public final class CIAztecCodeDescriptor: CIBarcodeDescriptor {
 
     // MARK: - Private Storage
 
@@ -162,7 +162,7 @@ public final class CIAztecCodeDescriptor: CIBarcodeDescriptor, @unchecked Sendab
 /// PDF417 is a stacked linear barcode symbol format used predominantly in transport,
 /// ID cards, and inventory management. Each pattern in the code comprises 4 bars and spaces,
 /// 17 units long.
-public final class CIPDF417CodeDescriptor: CIBarcodeDescriptor, @unchecked Sendable {
+public final class CIPDF417CodeDescriptor: CIBarcodeDescriptor {
 
     // MARK: - Private Storage
 
@@ -214,7 +214,7 @@ public final class CIPDF417CodeDescriptor: CIBarcodeDescriptor, @unchecked Senda
 ///
 /// A Data Matrix code symbol is a 2D barcode format defined by the ISO/IEC 16022:2006(E) standard.
 /// It encodes data in square or rectangular symbol with solid lines on the left and bottom sides.
-public final class CIDataMatrixCodeDescriptor: CIBarcodeDescriptor, @unchecked Sendable {
+public final class CIDataMatrixCodeDescriptor: CIBarcodeDescriptor {
 
     // MARK: - ECC Version
 

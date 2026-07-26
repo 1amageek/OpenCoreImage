@@ -18,12 +18,7 @@
 /// On native platforms (iOS, macOS), users should use Apple's CoreImage directly
 /// for full functionality. This stub exists to allow OpenCoreImage code to compile
 /// and run basic tests on native platforms.
-internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendable {
-
-    // MARK: - Properties
-
-    /// Context options.
-    private let options: [CIContextOption: Any]
+internal final class CIStubContextRenderer: CIContextRenderer {
 
     // MARK: - Initialization
 
@@ -31,32 +26,32 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
     ///
     /// - Parameter options: Context options.
     init(options: [CIContextOption: Any]?) {
-        self.options = options ?? [:]
+        _ = options
     }
 
     // MARK: - CIContextRenderer
 
-    func render(
+    nonisolated(nonsending) func render(
         image: CIImage,
         to rect: CGRect,
         format: CIFormat,
         colorSpace: CGColorSpace?
     ) async throws -> CIRenderResult {
+        try CIRenderResult.validateOutputFormat(format)
+
         let width = Int(rect.width)
         let height = Int(rect.height)
 
         // Handle solid color images
         if let color = image._color, image._filters.isEmpty {
             let pixelData = createSolidColorData(color: color, width: width, height: height)
-            guard let cgImage = createCGImageFromPixelData(
-                pixelData,
+            return try CIRenderResult(
+                pixelData: pixelData,
                 width: width,
                 height: height,
-                colorSpace: colorSpace
-            ) else {
-                throw CIError.renderingFailed
-            }
-            return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
+                colorSpace: colorSpace ?? .deviceRGB,
+                format: format
+            )
         }
 
         // Handle direct CGImage source with no filters (pure passthrough).
@@ -66,13 +61,22 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
                 requestedWidth: width,
                 requestedHeight: height
             )
-            return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
+            return try CIRenderResult(
+                pixelData: pixelData,
+                width: width,
+                height: height,
+                colorSpace: colorSpace ?? cgImage.colorSpace ?? .deviceRGB,
+                format: format
+            )
         }
 
         // Filter chains and transformed passthroughs require a real renderer.
         // The native stub intentionally throws rather than returning a
         // silently-zeroed buffer, so callers can distinguish "unsupported on
         // native" from "rendered black".
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Native compatibility rendering cannot evaluate filter chains or transformed sources.
+        // Native createCGImageAsync reaches this branch and must receive a typed failure rather than an unfiltered or zero-filled image.
+        // Remove this marker only after the native renderer matches the production filter semantics and success/failure tests.
         throw CIError.notImplemented
     }
 
@@ -138,31 +142,5 @@ internal final class CIStubContextRenderer: CIContextRenderer, @unchecked Sendab
         return data
     }
 
-    private func createCGImageFromPixelData(
-        _ data: Data,
-        width: Int,
-        height: Int,
-        colorSpace: CGColorSpace?
-    ) -> CGImage? {
-        let cs = colorSpace ?? .deviceRGB
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        let bytesPerRow = width * 4
-
-        let dataProvider = CGDataProvider(data: data)
-
-        return CGImage(
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bitsPerPixel: 32,
-            bytesPerRow: bytesPerRow,
-            space: cs,
-            bitmapInfo: bitmapInfo,
-            provider: dataProvider,
-            decode: nil,
-            shouldInterpolate: true,
-            intent: .defaultIntent
-        )
-    }
 }
 #endif

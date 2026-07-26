@@ -211,6 +211,84 @@ struct CIFilterRegistrationTests {
         let names = CIFilter.filterNames(inCategories: nil)
         #expect(names.contains("TestCustomFilter"))
     }
+
+    @Test("Registered attributes are immutable snapshots")
+    func registeredAttributesAreImmutableSnapshots() {
+        struct TestConstructor: CIFilterConstructor {
+            func filter(withName name: String) -> CIFilter? {
+                CIFilter(filterName: name)
+            }
+        }
+
+        var categories = ["SnapshotCategory"]
+        CIFilter.registerName(
+            "SnapshotFilter",
+            constructor: TestConstructor(),
+            classAttributes: [kCIAttributeFilterCategories: categories]
+        )
+        categories.append("MutatedAfterRegistration")
+
+        let filter = CIFilter.create(name: "SnapshotFilter")
+        let registeredCategories = filter?.attributes[kCIAttributeFilterCategories] as? [Any]
+        #expect(registeredCategories?.count == 1)
+        #expect(registeredCategories?.first as? String == "SnapshotCategory")
+    }
+
+    @Test("Registered attributes preserve numeric value types")
+    func registeredAttributesPreserveNumericTypes() {
+        struct TestConstructor: CIFilterConstructor {
+            func filter(withName name: String) -> CIFilter? {
+                CIFilter(filterName: name)
+            }
+        }
+
+        CIFilter.registerName(
+            "NumericSnapshotFilter",
+            constructor: TestConstructor(),
+            classAttributes: [
+                "integer": Int(7),
+                "float": Float(1.5),
+                "scalar": CGFloat(0.25),
+            ]
+        )
+
+        let attributes = CIFilter.create(name: "NumericSnapshotFilter")?.attributes
+        #expect(attributes?["integer"] is Int)
+        #expect(attributes?["float"] is Float)
+        #expect(attributes?["scalar"] is CGFloat)
+    }
+
+    @Test("Filter registry supports concurrent registration and lookup")
+    func filterRegistrySupportsConcurrentAccess() async {
+        struct TestConstructor: CIFilterConstructor {
+            func filter(withName name: String) -> CIFilter? {
+                CIFilter(filterName: name)
+            }
+        }
+
+        let results = await withTaskGroup(of: Bool.self, returning: [Bool].self) { group in
+            for index in 0..<32 {
+                group.addTask {
+                    let name = "ConcurrentFilter\(index)"
+                    CIFilter.registerName(
+                        name,
+                        constructor: TestConstructor(),
+                        classAttributes: [kCIAttributeFilterDisplayName: name]
+                    )
+                    return CIFilter.create(name: name)?.name == name
+                }
+            }
+
+            var results: [Bool] = []
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+
+        #expect(results.count == 32)
+        #expect(results.allSatisfy { $0 })
+    }
 }
 
 // MARK: - CIFilter Localization Tests

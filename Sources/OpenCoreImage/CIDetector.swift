@@ -97,7 +97,7 @@ private let supportedDetectorTypes: [String] = [
 ///
 /// - `features(in:options:)`: Synchronous API, always uses pure Swift implementation
 /// - `featuresAsync(in:options:)`: Asynchronous API, uses browser APIs when available
-public final class CIDetector: @unchecked Sendable {
+public final class CIDetector {
 
     // MARK: - Private Storage
 

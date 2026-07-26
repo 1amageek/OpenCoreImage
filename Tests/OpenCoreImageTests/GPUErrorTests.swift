@@ -68,6 +68,12 @@ struct GPUErrorCasesTests {
         #expect(error.errorDescription?.contains("Texture format not supported") == true)
     }
 
+    @Test("Missing source pixel data error")
+    func sourcePixelDataUnavailableError() {
+        let error = GPUError.sourcePixelDataUnavailable
+        #expect(error.errorDescription == "Source image has no pixel storage")
+    }
+
     @Test("Texture readback failed error with message")
     func textureReadbackFailedError() {
         let error = GPUError.textureReadbackFailed("Buffer mapping failed")
@@ -118,6 +124,7 @@ struct GPUErrorProtocolConformanceTests {
             .pipelineCreationFailed("test"),
             .renderingFailed("test"),
             .textureUploadFailed("test"),
+            .sourcePixelDataUnavailable,
             .textureReadbackFailed("test"),
             .invalidParameters("test"),
             .unsupportedFilter("test")

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 //
 // OpenCoreImage WASM smoke-test executable. Runs Swift Testing `@Test`
 // functions inside headless Chromium via swift-wasm-testing.
@@ -7,7 +7,8 @@
 // executed by the WebGPU compute backend with GPU readback verification.
 //
 // Builds with:
-//   swift build --product OCISmoke --swift-sdk swift-6.3.1-RELEASE_wasm -c release
+//   TOOLCHAINS=org.swift.64202607171a xcrun swift build --product OCISmoke \
+//     --swift-sdk swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-17-a_wasm -c release
 // then copy .build/wasm32-unknown-wasip1/release/OCISmoke.wasm into
 // Examples/SmokeTest/web/ where server.mjs serves it.
 

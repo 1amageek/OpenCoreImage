@@ -82,7 +82,7 @@ public protocol CIImageProcessorOutput {
 ///
 /// Your subclass should override at least the `process(with:arguments:output:)` method to perform
 /// its image processing.
-open class CIImageProcessorKernel: @unchecked Sendable {
+open class CIImageProcessorKernel {
 
     // MARK: - Initialization
 
@@ -111,6 +111,9 @@ open class CIImageProcessorKernel: @unchecked Sendable {
     // MARK: - Type Methods
 
     /// Call this method on your Core Image Processor Kernel subclass to create a new image of the specified extent.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Single-output image processor graph integration is not implemented.
+    // Processor subclasses reach this class method directly and currently receive a typed failure instead of a deferred executable image.
+    // Remove this marker only after input leasing, ROI evaluation, process invocation, output ownership, and failure tests exist.
     open class func apply(
         withExtent extent: CGRect,
         inputs: [CIImage]?,
@@ -122,6 +125,9 @@ open class CIImageProcessorKernel: @unchecked Sendable {
 
     /// Call this method on your multiple-output Core Image Processor Kernel subclass to create
     /// an array of new image objects given the specified array of extents.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Multiple-output image processor graph integration is not implemented.
+    // Processor subclasses reach this class method directly and currently receive a typed failure instead of executable output images.
+    // Remove this marker only after per-output formats, ownership, processing, and partial-failure behavior are tested.
     open class func apply(
         withExtents extents: [CIVector],
         inputs: [CIImage]?,
@@ -143,6 +149,9 @@ open class CIImageProcessorKernel: @unchecked Sendable {
     }
 
     /// Override this class method to implement your Core Image Processor Kernel subclass.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The base processor has no execution implementation.
+    // Renderer-driven processor calls would reach this method when a subclass does not override it and must fail explicitly.
+    // Remove this marker only when a concrete base behavior is defined and tested, or keep it as an abstract failure contract.
     open class func process(
         with inputs: [CIImageProcessorInput]?,
         arguments: [String: Any]?,
@@ -154,6 +163,9 @@ open class CIImageProcessorKernel: @unchecked Sendable {
 
     /// Override this class method of your Core Image Processor Kernel subclass if it needs
     /// to produce multiple outputs.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The base multi-output processor has no execution implementation.
+    // Renderer-driven processor calls would reach this method when a subclass does not override it and must fail explicitly.
+    // Remove this marker only when a concrete base behavior is defined and tested, or keep it as an abstract failure contract.
     open class func process(
         with inputs: [CIImageProcessorInput]?,
         arguments: [String: Any]?,

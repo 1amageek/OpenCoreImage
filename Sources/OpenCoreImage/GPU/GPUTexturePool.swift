@@ -8,11 +8,13 @@
 #if arch(wasm32)
 import SwiftWebGPU
 
-/// A key for identifying texture configurations.
-internal struct TextureKey: Hashable {
+/// A key for identifying compatible texture allocations.
+internal struct TextureKey: Equatable {
+    let deviceIdentifier: ObjectIdentifier
     let width: UInt32
     let height: UInt32
     let format: GPUTextureFormat
+    let usage: UInt32
 }
 
 /// Manages a pool of reusable GPU textures to minimize allocations.
@@ -34,11 +36,17 @@ internal actor GPUTexturePool {
 
     // MARK: - State
 
-    /// Available textures organized by configuration.
-    private var availableTextures: [TextureKey: [GPUTexture]] = [:]
+    private struct PooledTexture {
+        let key: TextureKey
+        let texture: GPUTexture
+    }
 
-    /// Total count of pooled textures.
-    private var totalPooledCount = 0
+    /// Available textures in insertion order.
+    ///
+    /// The pool is intentionally array-backed. Swift 6.4 release-WASM can
+    /// miscompile `_DictionaryStorage` operations for composite keys, while
+    /// the strict global capacity keeps linear lookup bounded.
+    private var availableTextures: [PooledTexture] = []
 
     // MARK: - Initialization
 
@@ -61,14 +69,16 @@ internal actor GPUTexturePool {
         format: GPUTextureFormat = .rgba8unorm,
         usage: GPUTextureUsage = [.textureBinding, .storageBinding, .copyDst, .copySrc]
     ) -> GPUTexture {
-        let key = TextureKey(width: width, height: height, format: format)
+        let key = TextureKey(
+            deviceIdentifier: ObjectIdentifier(device),
+            width: width,
+            height: height,
+            format: format,
+            usage: usage.rawValue
+        )
 
-        // Try to reuse an existing texture from the pool
-        if var textures = availableTextures[key], !textures.isEmpty {
-            let texture = textures.removeLast()
-            availableTextures[key] = textures
-            totalPooledCount -= 1
-            return texture
+        if let index = availableTextures.lastIndex(where: { $0.key == key }) {
+            return availableTextures.remove(at: index).texture
         }
 
         // Create a new texture
@@ -88,41 +98,54 @@ internal actor GPUTexturePool {
     ///   - format: The texture format.
     func release(
         _ texture: GPUTexture,
+        device: GPUDevice,
         width: UInt32,
         height: UInt32,
-        format: GPUTextureFormat
+        format: GPUTextureFormat,
+        usage: GPUTextureUsage = [.textureBinding, .storageBinding, .copyDst, .copySrc]
     ) {
-        let key = TextureKey(width: width, height: height, format: format)
+        let key = TextureKey(
+            deviceIdentifier: ObjectIdentifier(device),
+            width: width,
+            height: height,
+            format: format,
+            usage: usage.rawValue
+        )
 
-        // Check if we can add to the pool
-        var textures = availableTextures[key] ?? []
+        var matchingCount = 0
+        for entry in availableTextures where entry.key == key {
+            matchingCount += 1
+        }
 
-        // Only pool if under limits
-        guard textures.count < maxPoolSizePerKey,
-              totalPooledCount < maxTotalPoolSize else {
-            // Let texture be deallocated by not adding to pool
+        guard matchingCount < maxPoolSizePerKey,
+              availableTextures.count < maxTotalPoolSize else {
+            texture.destroy()
             return
         }
 
-        textures.append(texture)
-        availableTextures[key] = textures
-        totalPooledCount += 1
+        availableTextures.append(PooledTexture(key: key, texture: texture))
     }
 
     /// Clears all pooled textures, releasing GPU memory.
     func clear() {
+        for entry in availableTextures {
+            entry.texture.destroy()
+        }
         availableTextures.removeAll()
-        totalPooledCount = 0
     }
 
     /// Returns the current number of pooled textures.
     var pooledCount: Int {
-        totalPooledCount
+        availableTextures.count
     }
 
     /// Returns statistics about the texture pool.
     var statistics: (total: Int, configurations: Int) {
-        (totalPooledCount, availableTextures.count)
+        var configurations: [TextureKey] = []
+        for entry in availableTextures where !configurations.contains(entry.key) {
+            configurations.append(entry.key)
+        }
+        return (availableTextures.count, configurations.count)
     }
 }
 #endif

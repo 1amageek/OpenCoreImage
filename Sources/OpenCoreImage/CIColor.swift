@@ -5,20 +5,28 @@
 //  The Core Image class that defines a color object.
 //
 
+import Synchronization
 
 /// The Core Image class that defines a color object.
 ///
 /// Use `CIColor` instances in conjunction with other Core Image classes,
 /// such as `CIFilter` and `CIKernel`. Many of the built-in Core Image filters
 /// have one or more `CIColor` inputs that you can set to affect the filter's behavior.
-public final class CIColor: @unchecked Sendable {
+public final class CIColor: Sendable {
 
     // MARK: - Private Storage
 
     private let _colorSpace: CGColorSpace
     /// Heap-allocated stable storage for RGBA components.
     /// The pointer remains valid for the lifetime of this CIColor instance.
-    private let _storage: UnsafeMutablePointer<CGFloat>
+    ///
+    /// Memory invariants:
+    /// - `CIColor` owns the allocation and deallocates it exactly once.
+    /// - All `_count` elements are initialized before the initializer returns.
+    /// - The allocation is bound to `CGFloat` and uses its natural alignment.
+    /// - The public immutable borrow is valid only while this owner is retained.
+    /// - Pointer access is synchronized by the same `Mutex` on every target.
+    private let _storage: Mutex<UnsafeMutablePointer<CGFloat>>
     private let _count: Int
 
     // MARK: - Initializers
@@ -59,14 +67,17 @@ public final class CIColor: @unchecked Sendable {
         // Store in sRGB color space for CIColor
         self._colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? .deviceRGB
         self._count = rgba.count
-        self._storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
+        let storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
         for (i, value) in rgba.enumerated() {
-            _storage[i] = value
+            storage[i] = value
         }
+        self._storage = Mutex(storage)
     }
 
     deinit {
-        _storage.deallocate()
+        _storage.withLock { storage in
+            storage.deallocate()
+        }
     }
 
     /// Initialize a Core Image color object in the sRGB color space with the specified
@@ -89,10 +100,11 @@ public final class CIColor: @unchecked Sendable {
         self._colorSpace = colorSpace
         let rgba = [red, green, blue, 1.0]
         self._count = rgba.count
-        self._storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
+        let storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
         for (i, value) in rgba.enumerated() {
-            _storage[i] = value
+            storage[i] = value
         }
+        self._storage = Mutex(storage)
     }
 
     /// Initialize a Core Image color object with the specified red, green, blue, and alpha
@@ -102,10 +114,11 @@ public final class CIColor: @unchecked Sendable {
         self._colorSpace = colorSpace
         let rgba = [red, green, blue, alpha]
         self._count = rgba.count
-        self._storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
+        let storage = UnsafeMutablePointer<CGFloat>.allocate(capacity: rgba.count)
         for (i, value) in rgba.enumerated() {
-            _storage[i] = value
+            storage[i] = value
         }
+        self._storage = Mutex(storage)
     }
 
     /// Create a Core Image color object in the sRGB color space using a string
@@ -146,7 +159,9 @@ public final class CIColor: @unchecked Sendable {
     ///
     /// The pointer remains valid for the lifetime of this CIColor instance.
     public var components: UnsafePointer<CGFloat> {
-        UnsafePointer(_storage)
+        _storage.withLock { storage in
+            UnsafePointer(storage)
+        }
     }
 
     /// Returns the color components of the color including alpha.
@@ -156,22 +171,37 @@ public final class CIColor: @unchecked Sendable {
 
     /// Returns the unpremultiplied red component of the color.
     public var red: CGFloat {
-        _count > 0 ? _storage[0] : 0
+        component(at: 0, default: 0)
     }
 
     /// Returns the unpremultiplied green component of the color.
     public var green: CGFloat {
-        _count > 1 ? _storage[1] : 0
+        component(at: 1, default: 0)
     }
 
     /// Returns the unpremultiplied blue component of the color.
     public var blue: CGFloat {
-        _count > 2 ? _storage[2] : 0
+        component(at: 2, default: 0)
     }
 
     /// Returns the alpha value of the color.
     public var alpha: CGFloat {
-        _count > 3 ? _storage[3] : 1
+        component(at: 3, default: 1)
+    }
+
+    private func component(at index: Int, default defaultValue: CGFloat) -> CGFloat {
+        guard index >= 0, index < _count else {
+            return defaultValue
+        }
+        return _storage.withLock { storage in
+            storage[index]
+        }
+    }
+
+    private var componentValues: [CGFloat] {
+        _storage.withLock { storage in
+            Array(UnsafeBufferPointer(start: storage, count: _count))
+        }
     }
 
     /// Returns a formatted string with the unpremultiplied color and alpha components of the color.
@@ -220,12 +250,7 @@ extension CIColor: Equatable {
               lhs._colorSpace.name == rhs._colorSpace.name else {
             return false
         }
-        for i in 0..<lhs._count {
-            if lhs._storage[i] != rhs._storage[i] {
-                return false
-            }
-        }
-        return true
+        return lhs.componentValues == rhs.componentValues
     }
 }
 
@@ -234,8 +259,8 @@ extension CIColor: Equatable {
 extension CIColor: Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(_colorSpace.name)
-        for i in 0..<_count {
-            hasher.combine(_storage[i])
+        for component in componentValues {
+            hasher.combine(component)
         }
     }
 }

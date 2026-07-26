@@ -6,6 +6,8 @@
 //  or by generating new image data.
 //
 
+import Synchronization
+
 
 /// An image processor that produces an image by manipulating one or more input images
 /// or by generating new image data.
@@ -26,11 +28,151 @@ public class CIFilter {
     /// (declared in sibling files via `extension CIFilter: CIGaussianBlur { ... }`) can
     /// read and write the same dictionary that `setValue(_:forKey:)` uses.
     internal var _inputValues: [String: Any] = [:]
-    nonisolated(unsafe) private static var _registeredFilters: [String: FilterRegistration] = [:]
+    private static let registeredFilters = Mutex<[String: FilterRegistration]>([:])
 
-    private struct FilterRegistration {
-        let constructor: CIFilterConstructor
-        let classAttributes: [String: Any]
+    private struct FilterRegistration: Sendable {
+        let constructor: any CIFilterConstructor & Sendable
+        let classAttributes: [String: RegisteredAttribute]
+    }
+
+    private indirect enum RegisteredAttribute: Sendable {
+        case string(String)
+        case boolean(Bool)
+        case int(Int)
+        case int8(Int8)
+        case int16(Int16)
+        case int32(Int32)
+        case int64(Int64)
+        case uint(UInt)
+        case uint8(UInt8)
+        case uint16(UInt16)
+        case uint32(UInt32)
+        case uint64(UInt64)
+        case float(Float)
+        case double(Double)
+        case cgFloat(CGFloat)
+        case data(Data)
+        case array([RegisteredAttribute])
+        case dictionary([String: RegisteredAttribute])
+
+        init?(_ value: Any) {
+            switch value {
+            case let value as String:
+                self = .string(value)
+            case let value as Bool:
+                self = .boolean(value)
+            case let value as Int:
+                self = .int(value)
+            case let value as Int8:
+                self = .int8(value)
+            case let value as Int16:
+                self = .int16(value)
+            case let value as Int32:
+                self = .int32(value)
+            case let value as Int64:
+                self = .int64(value)
+            case let value as UInt:
+                self = .uint(value)
+            case let value as UInt8:
+                self = .uint8(value)
+            case let value as UInt16:
+                self = .uint16(value)
+            case let value as UInt32:
+                self = .uint32(value)
+            case let value as UInt64:
+                self = .uint64(value)
+            case let value as Float:
+                self = .float(value)
+            case let value as Double:
+                self = .double(value)
+            case let value as CGFloat:
+                self = .cgFloat(value)
+            case let value as Data:
+                self = .data(value)
+            case let value as [Any]:
+                var snapshot: [RegisteredAttribute] = []
+                snapshot.reserveCapacity(value.count)
+                for element in value {
+                    guard let attribute = RegisteredAttribute(element) else {
+                        return nil
+                    }
+                    snapshot.append(attribute)
+                }
+                self = .array(snapshot)
+            case let value as [String: Any]:
+                guard let snapshot = Self.snapshot(value) else {
+                    return nil
+                }
+                self = .dictionary(snapshot)
+            default:
+                return nil
+            }
+        }
+
+        static func snapshot(_ attributes: [String: Any]) -> [String: RegisteredAttribute]? {
+            var snapshot: [String: RegisteredAttribute] = [:]
+            snapshot.reserveCapacity(attributes.count)
+            for (key, value) in attributes {
+                guard let attribute = RegisteredAttribute(value) else {
+                    return nil
+                }
+                snapshot[key] = attribute
+            }
+            return snapshot
+        }
+
+        var value: Any {
+            switch self {
+            case .string(let value):
+                return value
+            case .boolean(let value):
+                return value
+            case .int(let value):
+                return value
+            case .int8(let value):
+                return value
+            case .int16(let value):
+                return value
+            case .int32(let value):
+                return value
+            case .int64(let value):
+                return value
+            case .uint(let value):
+                return value
+            case .uint8(let value):
+                return value
+            case .uint16(let value):
+                return value
+            case .uint32(let value):
+                return value
+            case .uint64(let value):
+                return value
+            case .float(let value):
+                return value
+            case .double(let value):
+                return value
+            case .cgFloat(let value):
+                return value
+            case .data(let value):
+                return value
+            case .array(let values):
+                return values.map(\.value)
+            case .dictionary(let values):
+                return values.mapValues(\.value)
+            }
+        }
+    }
+
+    private static func registration(named name: String) -> FilterRegistration? {
+        registeredFilters.withLock { registrations in
+            registrations[name]
+        }
+    }
+
+    private static var registeredFilterNames: [String] {
+        registeredFilters.withLock { registrations in
+            Array(registrations.keys)
+        }
     }
 
     // MARK: - Factory Methods
@@ -61,7 +203,7 @@ public class CIFilter {
     /// - Returns: A filter instance, which may be a subclass if registered.
     public class func create(name: String, withInputParameters params: [String: Any]?) -> CIFilter? {
         // Check for registered custom filter constructor
-        if let registration = _registeredFilters[name] {
+        if let registration = registration(named: name) {
             // Use registered constructor - returns the actual subclass instance
             guard let customFilter = registration.constructor.filter(withName: name) else {
                 return nil
@@ -124,7 +266,7 @@ public class CIFilter {
     ///   - params: Initial input parameters for the filter.
     public init?(name: String, withInputParameters params: [String: Any]?) {
         // Check for registered custom filter constructor
-        if let registration = CIFilter._registeredFilters[name] {
+        if let registration = CIFilter.registration(named: name) {
             // Use registered constructor to get initial values
             // Note: Subclass behavior is NOT preserved - use CIFilter.create() for that
             if let customFilter = registration.constructor.filter(withName: name) {
@@ -179,9 +321,9 @@ public class CIFilter {
         ]
 
         // Add registered class attributes if available
-        if let registration = CIFilter._registeredFilters[_name] {
+        if let registration = CIFilter.registration(named: _name) {
             for (key, value) in registration.classAttributes {
-                attrs[key] = value
+                attrs[key] = value.value
             }
         }
 
@@ -400,6 +542,9 @@ public class CIFilter {
         arguments args: [Any]?,
         options: [String: Any]?
     ) -> CIImage? {
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Custom CIKernel execution is not integrated with CIFilter output graphs.
+        // Custom filter implementations reach this method directly and must receive nil rather than an unevaluated placeholder image.
+        // Remove this marker only after kernel arguments, options, graph compilation, rendering, and failure behavior are tested.
         // Custom Core Image kernel compilation is unavailable on WebAssembly.
         // Returning nil preserves the failable contract without fabricating an
         // output image that was never evaluated.
@@ -415,7 +560,7 @@ public class CIFilter {
     /// Category filtering is coarse: a filter is considered to match a category if
     /// every requested category is inferred to apply via `categoriesForFilter(_:)`.
     public class func filterNames(inCategories categories: [String]?) -> [String] {
-        let allNames = Array(supportedBuiltInFilterNames) + Array(_registeredFilters.keys)
+        let allNames = Array(supportedBuiltInFilterNames) + registeredFilterNames
         guard let required = categories, !required.isEmpty else {
             return allNames
         }
@@ -458,15 +603,22 @@ public class CIFilter {
     ///   - name: The unique name to register the filter under.
     ///   - constructor: The constructor that creates filter instances.
     ///   - classAttributes: Attributes describing the filter's categories and capabilities.
-    public class func registerName(
+    public class func registerName<Constructor>(
         _ name: String,
-        constructor: CIFilterConstructor,
+        constructor: Constructor,
         classAttributes: [String: Any]
-    ) {
-        _registeredFilters[name] = FilterRegistration(
-            constructor: constructor,
-            classAttributes: classAttributes
-        )
+    ) where Constructor: CIFilterConstructor & Sendable {
+        guard let attributeSnapshot = RegisteredAttribute.snapshot(classAttributes) else {
+            preconditionFailure(
+                "CIFilter.registerName requires class attributes composed of strings, numbers, data, arrays, and string-keyed dictionaries"
+            )
+        }
+        registeredFilters.withLock { registrations in
+            registrations[name] = FilterRegistration(
+                constructor: constructor,
+                classAttributes: attributeSnapshot
+            )
+        }
     }
 
     // MARK: - Localized Information

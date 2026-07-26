@@ -11,6 +11,7 @@
 //   4. `BrowserTestRunner.run()` spawns the Swift Testing ABI v0 entry point.
 
 import Foundation
+import Synchronization
 import Testing
 import WasmTesting
 import OpenCoreImage
@@ -18,19 +19,54 @@ import OpenCoreGraphics
 
 // MARK: - Captured state (so a later render-path test has a hook)
 
-nonisolated(unsafe) var statusText: String = "initializing"
-nonisolated(unsafe) var renderError: String?
-nonisolated(unsafe) var invertedPixelData: Data?
-nonisolated(unsafe) var renderedPixels: [String: [UInt8]] = [:]
+private struct SmokeState: Sendable {
+    var statusText = "initializing"
+    var renderError: String?
+    var invertedPixelData: Data?
+    var renderedPixels: [String: [UInt8]] = [:]
+    var missingSourceError: String?
+}
+
+private let smokeState = Mutex(SmokeState())
+
+private func resetSmokeState() {
+    smokeState.withLock { state in
+        state = SmokeState()
+    }
+}
+
+private func completeSmokeState(
+    invertedPixelData: Data,
+    renderedPixels: [String: [UInt8]],
+    missingSourceError: String?
+) {
+    smokeState.withLock { state in
+        state.statusText = "ready"
+        state.renderError = nil
+        state.invertedPixelData = invertedPixelData
+        state.renderedPixels = renderedPixels
+        state.missingSourceError = missingSourceError
+    }
+}
+
+private func failSmokeState(with error: Error) {
+    smokeState.withLock { state in
+        state.statusText = "error"
+        state.renderError = String(describing: error)
+    }
+}
+
+private func currentSmokeState() -> SmokeState {
+    smokeState.withLock { state in
+        state
+    }
+}
 
 @_cdecl("setup")
 public func setup() {
     WasmTestingReactor.boot(
         touchGlobals: {
-            statusText = "initializing"
-            renderError = nil
-            invertedPixelData = nil
-            renderedPixels = [:]
+            resetSmokeState()
         },
         then: {
             await performRenderSetup()
@@ -61,11 +97,9 @@ private func performRenderSetup() async {
     do {
         let image = try await context.createCGImageAsync(output, from: source.extent)
         guard let data = image.data else {
-            renderError = "CIColorInvert output has no pixel data"
-            statusText = "error"
-            return
+            throw SmokeRenderError.missingPixelData
         }
-        invertedPixelData = data
+        var renderedPixels: [String: [UInt8]] = [:]
 
         let adjustmentSource = makeImage(pixel: [64, 128, 192, 255])
         renderedPixels["exposure"] = try await renderFirstPixel(
@@ -118,10 +152,27 @@ private func performRenderSetup() async {
             extent: multiplyForeground.extent,
             context: context
         )
-        statusText = "ready"
+
+        do {
+            _ = try await context.createCGImageAsync(
+                CIImage.empty().applyingFilter("CIColorInvert"),
+                from: CGRect(x: 0, y: 0, width: 1, height: 1)
+            )
+            completeSmokeState(
+                invertedPixelData: data,
+                renderedPixels: renderedPixels,
+                missingSourceError: "unexpected success"
+            )
+            return
+        } catch {
+            completeSmokeState(
+                invertedPixelData: data,
+                renderedPixels: renderedPixels,
+                missingSourceError: String(describing: error)
+            )
+        }
     } catch {
-        renderError = String(describing: error)
-        statusText = "error"
+        failSmokeState(with: error)
     }
 }
 
@@ -163,15 +214,17 @@ private func renderFirstPixel(
 struct OCISmokeTests {
 
     @Test func bootCompleted() throws {
+        let state = currentSmokeState()
         try #require(
-            statusText == "ready",
-            "reactor boot did not complete cleanly: \(statusText)"
+            state.statusText == "ready",
+            "reactor boot did not complete cleanly: \(state.statusText)"
         )
     }
 
     @Test func colorInvertRunsThroughWebGPU() throws {
-        try #require(renderError == nil, "render failed: \(renderError ?? "unknown")")
-        let data = try #require(invertedPixelData)
+        let state = currentSmokeState()
+        try #require(state.renderError == nil, "render failed: \(state.renderError ?? "unknown")")
+        let data = try #require(state.invertedPixelData)
         #expect(data.count == 4 * 4 * 4)
         #expect(data[0] <= 2, "red channel should be inverted to zero")
         #expect(data[1] >= 253, "green channel should be inverted to one")
@@ -180,7 +233,7 @@ struct OCISmokeTests {
     }
 
     @Test func exposureAdjustRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["exposure"])
+        let pixel = try #require(currentSmokeState().renderedPixels["exposure"])
         #expect(abs(Int(pixel[0]) - 128) <= 1)
         #expect(pixel[1] >= 254)
         #expect(pixel[2] == 255)
@@ -188,7 +241,7 @@ struct OCISmokeTests {
     }
 
     @Test func gammaAdjustRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["gamma"])
+        let pixel = try #require(currentSmokeState().renderedPixels["gamma"])
         #expect(abs(Int(pixel[0]) - 16) <= 1)
         #expect(abs(Int(pixel[1]) - 64) <= 1)
         #expect(abs(Int(pixel[2]) - 145) <= 1)
@@ -196,7 +249,7 @@ struct OCISmokeTests {
     }
 
     @Test func colorControlsRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["controls"])
+        let pixel = try #require(currentSmokeState().renderedPixels["controls"])
         #expect(abs(Int(pixel[0]) - 90) <= 1)
         #expect(abs(Int(pixel[1]) - 154) <= 1)
         #expect(abs(Int(pixel[2]) - 218) <= 1)
@@ -204,7 +257,7 @@ struct OCISmokeTests {
     }
 
     @Test func sepiaToneRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["sepia"])
+        let pixel = try #require(currentSmokeState().renderedPixels["sepia"])
         #expect(abs(Int(pixel[0]) - 159) <= 2)
         #expect(abs(Int(pixel[1]) - 142) <= 2)
         #expect(abs(Int(pixel[2]) - 111) <= 2)
@@ -212,7 +265,7 @@ struct OCISmokeTests {
     }
 
     @Test func sourceOverBlendKernelRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["sourceOver"])
+        let pixel = try #require(currentSmokeState().renderedPixels["sourceOver"])
         #expect(abs(Int(pixel[0]) - 128) <= 1)
         #expect(pixel[1] <= 1)
         #expect(abs(Int(pixel[2]) - 127) <= 1)
@@ -220,7 +273,7 @@ struct OCISmokeTests {
     }
 
     @Test func multiplyBlendModeRunsThroughWebGPU() throws {
-        let pixel = try #require(renderedPixels["multiply"])
+        let pixel = try #require(currentSmokeState().renderedPixels["multiply"])
         #expect(abs(Int(pixel[0]) - 64) <= 1)
         #expect(abs(Int(pixel[1]) - 64) <= 1)
         #expect(abs(Int(pixel[2]) - 64) <= 1)
@@ -272,5 +325,10 @@ struct OCISmokeTests {
     @Test func ciImageFromColorHasInfiniteExtent() throws {
         let image = CIImage(color: CIColor(red: 1, green: 0, blue: 0))
         #expect(image.extent.isInfinite, "CIImage(color:) should have infinite extent")
+    }
+
+    @Test func missingSourcePixelsAreRejected() throws {
+        let error = try #require(currentSmokeState().missingSourceError)
+        #expect(error.contains("sourcePixelDataUnavailable"))
     }
 }

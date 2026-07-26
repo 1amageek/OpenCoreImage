@@ -29,21 +29,7 @@ import SwiftWebGPU
 /// let context = CIContext()
 /// let cgImage = try await context.createCGImageAsync(outputImage, from: rect)
 /// ```
-internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Sendable {
-
-    // MARK: - Properties
-
-    /// The WebGPU device.
-    private var device: GPUDevice?
-
-    /// The GPU queue for submitting commands.
-    private var queue: GPUQueue?
-
-    /// Task for GPU initialization.
-    private var gpuInitTask: Task<GPUDevice, Error>?
-
-    /// Context options.
-    private let options: [CIContextOption: Any]
+internal final class CIWebGPUContextRenderer: CIContextRenderer {
 
     // MARK: - Initialization
 
@@ -51,39 +37,20 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
     ///
     /// - Parameter options: Context options.
     init(options: [CIContextOption: Any]?) {
-        self.options = options ?? [:]
-        startGPUInitialization()
-    }
-
-    /// Starts GPU initialization in the background.
-    private func startGPUInitialization() {
-        gpuInitTask = Task {
-            try await GPUContextManager.shared.getDevice()
-        }
-    }
-
-    /// Returns the GPU device, waiting for initialization if needed.
-    private func getGPUDevice() async throws -> GPUDevice {
-        if let device = device {
-            return device
-        }
-        if let task = gpuInitTask {
-            device = try await task.value
-            return device!
-        }
-        device = try await GPUContextManager.shared.getDevice()
-        return device!
+        _ = options
     }
 
     // MARK: - CIContextRenderer
 
-    func render(
+    nonisolated(nonsending) func render(
         image: CIImage,
         to rect: CGRect,
         format: CIFormat,
         colorSpace: CGColorSpace?
     ) async throws -> CIRenderResult {
-        let device = try await getGPUDevice()
+        try CIRenderResult.validateOutputFormat(format)
+
+        let device = try await GPUContextManager.shared.getDevice()
         let queue = try await GPUContextManager.shared.getQueue()
 
         let width = Int(rect.width)
@@ -92,21 +59,25 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         // Handle solid color images
         if let color = image._color, image._filters.isEmpty {
             let pixelData = createSolidColorData(color: color, width: width, height: height)
-            guard let cgImage = createCGImageFromPixelData(
-                pixelData,
+            return try CIRenderResult(
+                pixelData: pixelData,
                 width: width,
                 height: height,
-                colorSpace: colorSpace
-            ) else {
-                throw CIError.renderingFailed
-            }
-            return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
+                colorSpace: colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+                format: format
+            )
         }
 
         // Handle direct CGImage source with no filters
         if let cgImage = image.cgImage, image._filters.isEmpty {
             let pixelData = extractPixelData(from: cgImage, width: width, height: height)
-            return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
+            return try CIRenderResult(
+                pixelData: pixelData,
+                width: width,
+                height: height,
+                colorSpace: colorSpace ?? cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+                format: format
+            )
         }
 
         // Build filter graph DAG to get source images
@@ -149,23 +120,27 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         for texture in compiledGraph.textures {
             await GPUTexturePool.shared.release(
                 texture,
+                device: device,
                 width: compiledGraph.width,
                 height: compiledGraph.height,
                 format: .rgba8unorm
             )
         }
 
-        // Create CGImage from pixel data
-        guard let cgImage = createCGImageFromPixelData(
-            pixelData,
+        let resultColorSpace: CGColorSpace
+        if let colorSpace {
+            resultColorSpace = colorSpace
+        } else {
+            resultColorSpace = CGColorSpaceCreateDeviceRGB()
+        }
+        let result = try CIRenderResult(
+            pixelData: pixelData,
             width: width,
             height: height,
-            colorSpace: colorSpace
-        ) else {
-            throw CIError.renderingFailed
-        }
-
-        return CIRenderResult(pixelData: pixelData, width: width, height: height, cgImage: cgImage)
+            colorSpace: resultColorSpace,
+            format: format
+        )
+        return result
     }
 
     func clearCaches() {
@@ -183,7 +158,7 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
 
     // MARK: - Private Rendering Methods
 
-    private func uploadSourceTextures(
+    private nonisolated(nonsending) func uploadSourceTextures(
         filterGraph: FilterGraph,
         compiledGraph: CompiledFilterGraph,
         rect: CGRect,
@@ -263,7 +238,7 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
     ///
     /// - Note: This method always returns data in RGBA8 format (4 bytes per pixel)
     ///   regardless of the source format, as GPU textures are created as rgba8unorm.
-    private func getPixelData(
+    private nonisolated(nonsending) func getPixelData(
         from image: CIImage,
         sourceWidth: Int,
         sourceHeight: Int,
@@ -322,9 +297,10 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
                 targetRect: targetRect
             )
         }
-        // Fallback: transparent pixels (RGBA8)
+        // An image without a pixel source cannot be represented as a successful
+        // transparent render because that would hide a broken graph edge.
         else {
-            return Data(count: targetWidth * targetHeight * 4)
+            throw GPUError.sourcePixelDataUnavailable
         }
 
         // Process and crop the raw data, converting to RGBA8 if needed
@@ -857,7 +833,7 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         return result
     }
 
-    private func executeFilterGraph(
+    private nonisolated(nonsending) func executeFilterGraph(
         graph: CompiledFilterGraph,
         device: GPUDevice,
         queue: GPUQueue
@@ -889,7 +865,7 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         queue.submit([commandBuffer])
     }
 
-    private func readbackTexture(
+    private nonisolated(nonsending) func readbackTexture(
         texture: GPUTexture,
         width: UInt32,
         height: UInt32,
@@ -980,32 +956,5 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer, @unchecked Send
         return pixelData
     }
 
-    private func createCGImageFromPixelData(
-        _ data: Data,
-        width: Int,
-        height: Int,
-        colorSpace: CGColorSpace?
-    ) -> CGImage? {
-        let cs = colorSpace ?? CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        let bytesPerRow = width * 4
-
-        // On WASM, use OpenCoreGraphics which accepts Data directly
-        let dataProvider = CGDataProvider(data: data)
-
-        return CGImage(
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bitsPerPixel: 32,
-            bytesPerRow: bytesPerRow,
-            space: cs,
-            bitmapInfo: bitmapInfo,
-            provider: dataProvider,
-            decode: nil,
-            shouldInterpolate: true,
-            intent: .defaultIntent
-        )
-    }
 }
 #endif

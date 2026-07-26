@@ -15,7 +15,7 @@
 /// You use `CIImageAccumulator` objects in conjunction with other Core Image
 /// classes, such as `CIFilter`, `CIImage`, `CIVector`, and `CIContext`, to take
 /// advantage of the built-in Core Image filters when processing images.
-public final class CIImageAccumulator: @unchecked Sendable {
+public final class CIImageAccumulator {
 
     // MARK: - Private Storage
 

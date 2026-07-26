@@ -32,6 +32,9 @@ internal enum GPUError: Error, LocalizedError {
     /// Texture upload failed.
     case textureUploadFailed(String)
 
+    /// The source image has no pixels that can be uploaded.
+    case sourcePixelDataUnavailable
+
     /// Texture readback failed.
     case textureReadbackFailed(String)
 
@@ -59,6 +62,8 @@ internal enum GPUError: Error, LocalizedError {
             return "Rendering failed: \(message)"
         case .textureUploadFailed(let message):
             return "Texture upload failed: \(message)"
+        case .sourcePixelDataUnavailable:
+            return "Source image has no pixel storage"
         case .textureReadbackFailed(let message):
             return "Texture readback failed: \(message)"
         case .invalidParameters(let message):

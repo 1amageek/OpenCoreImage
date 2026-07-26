@@ -17,7 +17,7 @@
 /// all the information necessary to produce an image, but Core Image doesn't actually
 /// render an image until it is told to do so. This lazy evaluation allows Core Image
 /// to operate as efficiently as possible.
-public final class CIImage: @unchecked Sendable {
+public final class CIImage {
 
     // MARK: - Internal Storage
 

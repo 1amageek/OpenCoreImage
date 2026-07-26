@@ -22,7 +22,7 @@ let outputImage = filter?.outputImage
 
 ## Requirements
 
-- Swift 6.3.1+
+- Swift `swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-17-a`
 - For WASM: SwiftWasm toolchain
 
 ## Installation
@@ -55,15 +55,16 @@ perl -e 'alarm 30; exec @ARGV' -- \
   xcodebuild test -scheme OpenCoreImage -destination 'platform=macOS' \
   -only-testing:OpenCoreImageTests
 
-# Build for WASM (requires SwiftWasm toolchain)
-swift build --swift-sdk swift-6.3.1-RELEASE_wasm
+# Build for WASM
+TOOLCHAINS=org.swift.64202607171a xcrun swift build \
+  --swift-sdk swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-17-a_wasm
 ```
 
 ## WASM-Build Smoke Test
 
 OpenCoreImage has a real-browser harness that evaluates a filter graph,
 compiles WGSL, executes WebGPU compute work, and checks GPU readback. The
-current verified baseline is 695 native tests and 13 browser checks. Seven of
+current verified baseline is 705 native tests and 14 browser checks. Seven of
 the browser checks assert filter-specific RGBA pixels read back from WebGPU;
 the remaining checks cover API and graph behavior.
 

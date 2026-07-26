@@ -11,7 +11,7 @@
 /// This struct provides common image processing operations used by various
 /// detection algorithms, including edge detection, binarization, connected
 /// component analysis, and morphological operations.
-internal struct ImageAnalyzer: Sendable {
+internal struct ImageAnalyzer {
 
     // MARK: - Types
 
@@ -97,7 +97,9 @@ internal struct ImageAnalyzer: Sendable {
     ///
     /// - Parameter image: The source image
     /// - Returns: Tuple of (pixel data array, width, height), or nil if extraction fails
-    func getPixelDataAsync(from image: CIImage) async -> (data: [UInt8], width: Int, height: Int)? {
+    nonisolated(nonsending) func getPixelDataAsync(
+        from image: CIImage
+    ) async -> (data: [UInt8], width: Int, height: Int)? {
         let ctx = context ?? CIContext()
         let extent = image.extent
 

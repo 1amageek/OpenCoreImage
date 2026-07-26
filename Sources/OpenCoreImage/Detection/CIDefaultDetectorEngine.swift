@@ -11,7 +11,7 @@
 /// This engine uses CPU-based algorithms for all detection types and works
 /// on all platforms. It provides the fallback implementation when browser
 /// APIs are not available.
-internal final class CIDefaultDetectorEngine: CIDetectorEngine, @unchecked Sendable {
+internal final class CIDefaultDetectorEngine: CIDetectorEngine {
 
     // MARK: - Properties
 

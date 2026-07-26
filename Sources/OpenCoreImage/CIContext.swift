@@ -13,7 +13,7 @@
 ///
 /// `CIContext` and `CIImage` instances are immutable, so multiple threads can use the same
 /// `CIContext` instance to render `CIImage` instances.
-public final class CIContext: @unchecked Sendable {
+public final class CIContext {
 
     // MARK: - Internal Storage
 
@@ -156,6 +156,9 @@ public final class CIContext: @unchecked Sendable {
         // asynchronous. Use `createCGImageAsync(...)` for images that contain a
         // filter graph. The early returns above already cover the cases that
         // *can* be served synchronously (solid color, cropped CGImage source).
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Synchronous filter-graph execution is unavailable because the production WebGPU readback path is asynchronous.
+        // createCGImage(_:from:format:colorSpace:deferred:) reaches this branch for every filtered image and must return nil rather than an unfiltered result.
+        // Remove this marker only after a synchronous backend has semantic parity and success/failure behavior tests, or the portable API is formally async-only.
         print("CIContext.createCGImage: filter-chain rendering requires createCGImageAsync(_:from:)")
         return nil
     }
@@ -179,7 +182,7 @@ public final class CIContext: @unchecked Sendable {
     ///   - format: The pixel format.
     ///   - colorSpace: The color space.
     /// - Returns: The rendered CGImage.
-    public func createCGImageAsync(
+    public nonisolated(nonsending) func createCGImageAsync(
         _ image: CIImage,
         from fromRect: CGRect,
         format: CIFormat = .RGBA8,
@@ -191,7 +194,7 @@ public final class CIContext: @unchecked Sendable {
             format: format,
             colorSpace: colorSpace ?? _workingColorSpace
         )
-        return result.cgImage
+        return try result.makeCGImage()
     }
 
     // MARK: - Helper Methods
@@ -488,6 +491,9 @@ public final class CIContext: @unchecked Sendable {
     ///   which properly handle decoding through WebGPU pipelines.
     ///
     /// - Returns: Always `nil`. Detection will fall back to pure Swift algorithms.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Synchronous encoded-image pixel decoding is not implemented.
+    // Synchronous render and detector paths reach this helper for encoded CIImage data and must receive nil rather than header-only pseudo-pixels.
+    // Remove this marker only after complete pixel decoding and malformed-input behavior are tested without suspension.
     private func decodeImageDataSync(
         _ data: Data,
         width: Int,
@@ -523,7 +529,11 @@ public final class CIContext: @unchecked Sendable {
     ///
     /// This OpenCoreImage extension is the WebAssembly-safe counterpart of
     /// `draw(_:in:from:)` for filter graphs that require WebGPU evaluation.
-    public func drawAsync(_ image: CIImage, in inRect: CGRect, from fromRect: CGRect) async throws {
+    public nonisolated(nonsending) func drawAsync(
+        _ image: CIImage,
+        in inRect: CGRect,
+        from fromRect: CGRect
+    ) async throws {
         guard let destinationCGContext else {
             throw CIError.invalidArgument
         }
@@ -569,7 +579,9 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Placeholder implementation
+        // FIXME(INCOMPLETE_IMPLEMENTATION): TIFF representation encoding is not implemented.
+        // Synchronous export callers reach this method directly and must receive nil rather than invalid or empty encoded data.
+        // Remove this marker only after rasterization, TIFF encoding, metadata, and failure behavior are tested.
         nil
     }
 
@@ -579,7 +591,9 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Synchronous encoding not available - use jpegRepresentationAsync on WASM
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Synchronous JPEG representation encoding is not implemented.
+        // Synchronous export callers reach this method directly and must receive nil rather than invalid or empty encoded data.
+        // Remove this marker only after rasterization, quality handling, encoding, and failure behavior are tested.
         nil
     }
 
@@ -590,7 +604,9 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Synchronous encoding not available - use pngRepresentationAsync on WASM
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Synchronous PNG representation encoding is not implemented.
+        // Synchronous export callers reach this method directly and must receive nil rather than invalid or empty encoded data.
+        // Remove this marker only after rasterization, format conversion, encoding, and failure behavior are tested.
         nil
     }
 
@@ -698,7 +714,9 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) -> Data? {
-        // Placeholder implementation
+        // FIXME(INCOMPLETE_IMPLEMENTATION): HEIF representation encoding is not implemented.
+        // Export callers reach this method directly and must receive nil rather than invalid or empty encoded data.
+        // Remove this marker only after capability detection, rasterization, encoding, metadata, and failure behavior are tested.
         nil
     }
 
@@ -708,7 +726,9 @@ public final class CIContext: @unchecked Sendable {
         colorSpace: CGColorSpace,
         options: [CIImageRepresentationOption: Any]
     ) throws -> Data {
-        // Placeholder implementation
+        // FIXME(INCOMPLETE_IMPLEMENTATION): 10-bit HEIF representation encoding is not implemented.
+        // Export callers reach this method directly and currently receive a typed failure rather than mislabeled 8-bit data.
+        // Remove this marker only after 10-bit pixel conversion, encoding, metadata, and failure behavior are tested.
         throw CIError.notImplemented
     }
 
@@ -717,7 +737,9 @@ public final class CIContext: @unchecked Sendable {
         of image: CIImage,
         options: [CIImageRepresentationOption: Any]
     ) throws -> Data {
-        // Placeholder implementation
+        // FIXME(INCOMPLETE_IMPLEMENTATION): OpenEXR representation encoding is not implemented.
+        // Export callers reach this method directly and currently receive a typed failure rather than mislabeled output.
+        // Remove this marker only after floating-point channel encoding, metadata, and failure behavior are tested.
         throw CIError.notImplemented
     }
 
@@ -906,9 +928,10 @@ public struct CIImageRepresentationOption: RawRepresentable, Equatable, Hashable
 // MARK: - CIError
 
 /// Errors that can occur during Core Image operations.
-public enum CIError: Error {
+public enum CIError: Error, Equatable, Sendable {
     case notImplemented
     case renderingFailed
     case invalidArgument
     case outOfMemory
+    case unsupportedFormat(CIFormat)
 }

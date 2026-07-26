@@ -37,7 +37,7 @@
 ///     }
 /// }
 /// ```
-internal protocol CIContextRenderer: AnyObject, Sendable {
+internal protocol CIContextRenderer: AnyObject {
 
     // MARK: - Rendering
 
@@ -51,9 +51,9 @@ internal protocol CIContextRenderer: AnyObject, Sendable {
     ///   - rect: The region to render.
     ///   - format: The pixel format for the output.
     ///   - colorSpace: The color space for the output.
-    /// - Returns: The render result containing pixel data and CGImage.
+    /// - Returns: The render result containing owned pixel data and metadata.
     /// - Throws: `CIError` if rendering fails.
-    func render(
+    nonisolated(nonsending) func render(
         image: CIImage,
         to rect: CGRect,
         format: CIFormat,

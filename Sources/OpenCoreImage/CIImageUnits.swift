@@ -23,7 +23,7 @@ public protocol CIPlugInRegistration {
 ///
 /// An image unit is an image processing bundle that contains one or more Core Image filters.
 /// The `.plugin` extension indicates one or more filters packaged as an image unit.
-public final class CIPlugIn: @unchecked Sendable {
+public final class CIPlugIn {
 
     // MARK: - Initialization
 
@@ -32,15 +32,19 @@ public final class CIPlugIn: @unchecked Sendable {
     // MARK: - Loading Plug-ins
 
     /// Scans directories for plugins.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Portable image-unit discovery has no filesystem and registration implementation.
+    // Applications can call this void API directly, so it must fail explicitly instead of reporting success through a silent no-op.
+    // Remove this marker only after discovery, registration, duplicate handling, and invalid-bundle tests exist.
     public class func loadNonExecutablePlugIns() {
-        // Placeholder implementation
-        // In a full implementation, this would scan standard plugin directories
+        preconditionFailure("Portable Core Image plug-in discovery is not implemented")
     }
 
     /// Loads a non-executable plug-in specified by its URL.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Portable image-unit loading from URL is not implemented.
+    // Applications can call this void API directly, so it must fail explicitly instead of reporting success through a silent no-op.
+    // Remove this marker only after bundle validation, registration, duplicate handling, and malformed-input tests exist.
     public class func loadNonExecutablePlugIn(_ url: URL?) {
-        // Placeholder implementation
-        // In a full implementation, this would load the plugin at the specified URL
+        preconditionFailure("Portable Core Image plug-in loading is not implemented")
     }
 }
 
@@ -81,7 +85,7 @@ public let kCIFilterGeneratorExportedKeyTargetObject: String = "CIFilterGenerato
 /// The complex effect can be encapsulated as a `CIFilterGenerator` object and saved as a
 /// file so that it can be used again. The **filter generator file** contains an archived
 /// instance of all the `CIFilter` objects that are chained together.
-public final class CIFilterGenerator: @unchecked Sendable {
+public final class CIFilterGenerator {
 
     // MARK: - Private Storage
 
@@ -95,9 +99,11 @@ public final class CIFilterGenerator: @unchecked Sendable {
     public init() {}
 
     /// Initializes a filter generator object with the contents of a filter generator file.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Filter-generator archive decoding is not implemented.
+    // Applications reach this failable initializer directly; it must return nil instead of accepting an unread archive as an empty generator.
+    // Remove this marker only after graph, exported-key, attribute, and malformed-archive tests exist.
     public init?(contentsOf url: URL) {
-        // Placeholder implementation
-        // In a full implementation, this would load from the file
+        return nil
     }
 
     // MARK: - Connecting and Disconnecting Objects
@@ -157,9 +163,10 @@ public final class CIFilterGenerator: @unchecked Sendable {
     // MARK: - Archiving a Filter Generator Object
 
     /// Archives a filter generator object to a filter generator file.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Filter-generator archive encoding is not implemented.
+    // Applications reach this method directly and currently receive false rather than a fabricated file-success result.
+    // Remove this marker only after atomic and non-atomic writes, graph round trips, and I/O failure tests exist.
     public func write(to url: URL, atomically: Bool) -> Bool {
-        // Placeholder implementation
-        // In a full implementation, this would archive the filter chain
         false
     }
 
@@ -173,10 +180,11 @@ public final class CIFilterGenerator: @unchecked Sendable {
     // MARK: - Creating a Filter from a Filter Chain
 
     /// Creates a filter object based on the filter chain.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Filter-generator connections are not compiled into an executable composite filter.
+    // Applications and registered constructors reach this nonoptional API, so it must fail explicitly instead of returning an unrelated base filter.
+    // Remove this marker only after connection evaluation, exported-key forwarding, output propagation, and invalid-graph tests exist.
     public func filter() -> CIFilter {
-        // Placeholder implementation
-        // In a full implementation, this would create a composite filter
-        CIFilter(name: classAttributes[kCIAttributeFilterName] as? String ?? "CIFilterGenerator")!
+        preconditionFailure("Portable CIFilterGenerator graph execution is not implemented")
     }
 }
 

@@ -12,7 +12,7 @@
 /// They can store a group of float values for a variety of different uses
 /// such as coordinate points, direction vectors, geometric rectangles,
 /// transform matrices, convolution weights, or just a list of parameter values.
-public final class CIVector: @unchecked Sendable {
+public final class CIVector: Sendable {
 
     // MARK: - Private Storage
 
