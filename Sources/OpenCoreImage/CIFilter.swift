@@ -27,7 +27,18 @@ public class CIFilter {
     /// Backing storage for input parameters. Internal so per-filter protocol conformances
     /// (declared in sibling files via `extension CIFilter: CIGaussianBlur { ... }`) can
     /// read and write the same dictionary that `setValue(_:forKey:)` uses.
-    internal var _inputValues: [String: Any] = [:]
+    internal var _inputValues: [String: Any] = [:] {
+        didSet { _configurationRevision &+= 1 }
+    }
+
+    /// A monotonically increasing token for framework integrations that cache
+    /// the output of this mutable filter.
+    ///
+    /// This is SPI rather than Core Image API surface. Consumers must compare
+    /// the token both before and after asynchronous evaluation and discard a
+    /// result when it changes.
+    @_spi(OpenSpriteKit)
+    public private(set) var _configurationRevision: UInt64 = 0
     private static let registeredFilters = Mutex<[String: FilterRegistration]>([:])
 
     private struct FilterRegistration: Sendable {
