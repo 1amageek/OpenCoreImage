@@ -33,6 +33,7 @@ let package = Package(
         .executableTarget(
             name: "OpenCoreImageEmbeddedSmoke",
             dependencies: ["OpenCoreImage"],
+            path: "Tests/Runtime/OpenCoreImageEmbeddedSmoke",
             linkerSettings: [
                 .unsafeFlags(
                     [
