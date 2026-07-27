@@ -671,7 +671,9 @@ internal final class FilterGraphCompiler: Sendable {
         if let d = value as? Double { return Float(d) }
         if let cg = value as? CGFloat { return Float(cg) }
         if let i = value as? Int { return Float(i) }
+        #if !hasFeature(Embedded)
         if let n = value as? NSNumber { return n.floatValue }
+        #endif
         return nil
     }
 }

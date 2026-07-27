@@ -238,7 +238,10 @@ public final class CIContext {
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
             ) else { return }
 
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(
+                cgImage,
+                in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+            )
         }
 
         return pixelData
@@ -375,7 +378,7 @@ public final class CIContext {
                 if rowBytes == sourceRowBytes {
                     // Direct copy
                     let copySize = min(sourceData.count, rowBytes * height)
-                    memcpy(destBase, srcBase, copySize)
+                    destBase.copyMemory(from: srcBase, byteCount: copySize)
                 } else {
                     // Row-by-row copy with stride adjustment
                     for row in 0..<height {
@@ -385,10 +388,9 @@ public final class CIContext {
 
                         guard srcOffset + copyWidth <= sourceData.count else { break }
 
-                        memcpy(
-                            destBase.advanced(by: destOffset),
-                            srcBase.advanced(by: srcOffset),
-                            copyWidth
+                        destBase.advanced(by: destOffset).copyMemory(
+                            from: srcBase.advanced(by: srcOffset),
+                            byteCount: copyWidth
                         )
                     }
                 }
@@ -436,10 +438,9 @@ public final class CIContext {
                         let srcOffset = srcRow * sourceBytesPerRow + startX * sourceBytesPerPixel
                         let destOffset = row * targetRowBytes
 
-                        memcpy(
-                            destBase.advanced(by: destOffset),
-                            srcBase.advanced(by: srcOffset),
-                            targetRowBytes
+                        destBase.advanced(by: destOffset).copyMemory(
+                            from: srcBase.advanced(by: srcOffset),
+                            byteCount: targetRowBytes
                         )
                     }
                 }

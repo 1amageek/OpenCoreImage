@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    { "id": "api", "label": "CIContext / CIImage / CIFilter" },
+    { "id": "ci", "label": "OpenCoreImage shared implementation" },
+    { "id": "cg", "label": "OpenCoreGraphics" },
+    { "id": "support", "label": "OpenCoreGraphicsSupport" },
+    { "id": "c", "label": "C math and WASI file I/O" },
+    { "id": "gpu", "label": "SwiftWebGPU / JavaScriptKit" },
+    { "id": "browser", "label": "Browser WebGPU" }
+  ],
+  "edges": [
+    ["api", "ci"],
+    ["ci", "cg"],
+    ["cg", "support"],
+    ["support", "c"],
+    ["ci", "gpu"],
+    ["gpu", "browser"]
+  ]
+}

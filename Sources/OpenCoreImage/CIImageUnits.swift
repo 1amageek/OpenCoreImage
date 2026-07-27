@@ -131,7 +131,7 @@ public final class CIFilterGenerator {
     /// Exports an input or output key of an object in the filter chain.
     public func exportKey(_ key: String, from object: Any, withName name: String?) {
         let exportName = name ?? key
-        _exportedKeys[exportName] = [
+        _exportedKeys[AnyHashable(exportName)] = [
             kCIFilterGeneratorExportedKey: key,
             kCIFilterGeneratorExportedKeyTargetObject: object
         ]
@@ -139,16 +139,16 @@ public final class CIFilterGenerator {
 
     /// Removes a key that was previously exported.
     public func removeExportedKey(_ key: String) {
-        _exportedKeys.removeValue(forKey: key)
+        _exportedKeys.removeValue(forKey: AnyHashable(key))
     }
 
     /// Sets a dictionary of attributes for an exported key.
     public func setAttributes(_ attributes: [AnyHashable: Any], forExportedKey key: String) {
-        if var existingAttrs = _exportedKeys[key] as? [AnyHashable: Any] {
+        if var existingAttrs = _exportedKeys[AnyHashable(key)] as? [AnyHashable: Any] {
             for (attrKey, attrValue) in attributes {
                 existingAttrs[attrKey] = attrValue
             }
-            _exportedKeys[key] = existingAttrs
+            _exportedKeys[AnyHashable(key)] = existingAttrs
         }
     }
 
@@ -174,7 +174,7 @@ public final class CIFilterGenerator {
 
     /// Registers the name associated with a filter chain.
     public func registerFilterName(_ name: String) {
-        _classAttributes[kCIAttributeFilterName] = name
+        _classAttributes[AnyHashable(kCIAttributeFilterName)] = name
     }
 
     // MARK: - Creating a Filter from a Filter Chain
@@ -192,7 +192,7 @@ public final class CIFilterGenerator {
 
 extension CIFilterGenerator: CIFilterConstructor {
     public func filter(withName name: String) -> CIFilter? {
-        if classAttributes[kCIAttributeFilterName] as? String == name {
+        if classAttributes[AnyHashable(kCIAttributeFilterName)] as? String == name {
             return filter()
         }
         return nil

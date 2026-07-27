@@ -1,0 +1,322 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "layer": "https://deep-analysis.dev/layers#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": { "@id": "ea:sessionMetadata", "@type": "@json" },
+    "view": { "@id": "ea:view", "@type": "@json" },
+    "tags": { "@id": "ea:tag", "@container": "@set" },
+    "epistemicStatus": { "@id": "ea:epistemicStatus" },
+    "confidence": { "@id": "ea:confidence", "@type": "xsd:decimal" },
+    "priorConfidence": { "@id": "ea:priorConfidence", "@type": "xsd:decimal" },
+    "posteriorConfidence": { "@id": "ea:posteriorConfidence", "@type": "xsd:decimal" },
+    "parent": { "@id": "ea:parent", "@type": "@id" },
+    "children": { "@id": "ea:children", "@type": "@id", "@container": "@set" },
+    "decompositionStrategy": { "@id": "ea:decompositionStrategy" },
+    "derivedFrom": { "@id": "ea:derivedFrom", "@type": "@id", "@container": "@set" },
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": { "@id": "ea:inferenceType" },
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": { "@id": "ea:inferenceStrength", "@type": "xsd:decimal" },
+    "synthesis": { "@id": "ea:synthesis", "@type": "@json" },
+    "claimRole": { "@id": "ea:claimRole" },
+    "primaryEvidence": { "@id": "ea:primaryEvidence", "@type": "@id", "@container": "@set" },
+    "counterEvidence": { "@id": "ea:counterEvidence", "@type": "@id", "@container": "@set" },
+    "sourceTopics": { "@id": "ea:sourceTopics", "@type": "@id", "@container": "@set" },
+    "reasoningPattern": { "@id": "ea:reasoningPattern" },
+    "synthesisStrength": { "@id": "ea:synthesisStrength", "@type": "xsd:decimal" },
+    "limitations": { "@id": "ea:limitations" },
+    "visualEvidenceRequirement": { "@id": "ea:visualEvidenceRequirement", "@type": "@json" },
+    "evidencePattern": { "@id": "ea:evidencePattern" },
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": { "@id": "ea:evidence", "@type": "@json" },
+    "investigations": { "@id": "ea:investigations", "@type": "@json" },
+    "insights": { "@id": "ea:insights", "@type": "@json" },
+    "chartableData": { "@id": "ea:chartableData", "@type": "@json" },
+    "questionStatus": { "@id": "ea:questionStatus" },
+    "supports": { "@id": "rel:supports", "@type": "@id", "@container": "@set" },
+    "refutes": { "@id": "rel:refutes", "@type": "@id", "@container": "@set" },
+    "asksAbout": { "@id": "rel:asksAbout", "@type": "@id", "@container": "@set" },
+    "resolvedBy": { "@id": "rel:resolvedBy", "@type": "@id", "@container": "@set" },
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": { "@id": "ea:supportsClaim", "@type": "@id", "@container": "@set" },
+    "visualRole": { "@id": "ea:visualRole" },
+    "appliedFrameworks": { "@id": "ea:appliedFrameworks", "@container": "@set" },
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": { "@id": "prov:generatedAtTime", "@type": "xsd:dateTime" },
+    "updatedAt": { "@id": "ea:updatedAt", "@type": "xsd:dateTime" },
+    "wasGeneratedBy": { "@id": "prov:wasGeneratedBy" },
+    "wasRevisionOf": { "@id": "prov:wasRevisionOf" },
+    "source": "ea:source",
+    "sourceUrl": { "@id": "schema:url" },
+    "reliability": { "@id": "ea:reliability", "@type": "xsd:decimal" },
+    "evidenceCount": { "@id": "epi:evidenceCount", "@type": "xsd:integer" },
+    "counterEvidenceCount": { "@id": "epi:counterEvidenceCount", "@type": "xsd:integer" },
+    "investigationCount": { "@id": "epi:investigationCount", "@type": "xsd:integer" },
+    "lastUpdated": { "@id": "epi:lastUpdated", "@type": "xsd:dateTime" },
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": { "@id": "epi:fromConfidence", "@type": "xsd:decimal" },
+    "toConfidence": { "@id": "epi:toConfidence", "@type": "xsd:decimal" },
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence",
+    "causes": { "@id": "rel:causes", "@type": "@id" },
+    "causedBy": { "@id": "rel:causedBy", "@reverse": "rel:causes" },
+    "enables": { "@id": "rel:enables", "@type": "@id" },
+    "prevents": { "@id": "rel:prevents", "@type": "@id" },
+    "correlatesWith": { "@id": "rel:correlatesWith", "@type": "@id" },
+    "implies": { "@id": "rel:implies", "@type": "@id" },
+    "contradicts": { "@id": "rel:contradicts", "@type": "@id" },
+    "partOf": { "@id": "rel:partOf", "@type": "@id" },
+    "hasComponent": { "@id": "rel:hasComponent", "@reverse": "rel:partOf" },
+    "generalizes": { "@id": "rel:generalizes", "@type": "@id" },
+    "specializes": { "@id": "rel:specializes", "@reverse": "rel:generalizes" },
+    "analogousTo": { "@id": "rel:analogousTo", "@type": "@id" },
+    "precedes": { "@id": "rel:precedes", "@type": "@id" },
+    "triggers": { "@id": "rel:triggers", "@type": "@id" },
+    "coOccursWith": { "@id": "rel:coOccursWith", "@type": "@id" },
+    "manifestsAs": { "@id": "rel:manifestsAs", "@type": "@id" },
+    "addresses": { "@id": "rel:addresses", "@type": "@id" },
+    "addressedBy": { "@id": "rel:addressedBy", "@reverse": "rel:addresses" },
+    "operatesIn": { "@id": "rel:operatesIn", "@type": "@id" },
+    "produces": { "@id": "rel:produces", "@type": "@id" },
+    "strength": { "@id": "rel:strength", "@type": "xsd:decimal" },
+    "polarity": { "@id": "rel:polarity" }
+  },
+  "session": {
+    "id": "session:2026-07-27_opencoreimage-embedded",
+    "title": "OpenCoreImage CIContext WASM and Embedded Completion",
+    "createdAt": "2026-07-27T13:40:00+09:00",
+    "updatedAt": "2026-07-27T14:17:14+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/target-baseline",
+            "kind": "category",
+            "title": "Target Baseline",
+            "layer": "Context",
+            "category": "Target Baseline",
+            "members": [
+              "ea:session/2026-07-27_opencoreimage-embedded/topic/T001"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/build-failures",
+            "kind": "category",
+            "title": "Build Failures",
+            "layer": "Problem",
+            "category": "Build Failures",
+            "members": [
+              "ea:session/2026-07-27_opencoreimage-embedded/question/Q001",
+              "ea:session/2026-07-27_opencoreimage-embedded/evidence/E001",
+              "ea:session/2026-07-27_opencoreimage-embedded/evidence/E002"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/issue",
+        "kind": "layer",
+        "title": "Issue",
+        "layer": "Issue",
+        "children": [
+          {
+            "id": "group:category/issue/platform-contract",
+            "kind": "category",
+            "title": "Platform Contract",
+            "layer": "Issue",
+            "category": "Platform Contract",
+            "members": [
+              "ea:session/2026-07-27_opencoreimage-embedded/topic/T002",
+              "ea:session/2026-07-27_opencoreimage-embedded/topic/T004"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/verification",
+            "kind": "category",
+            "title": "Verification",
+            "layer": "Outcome",
+            "category": "Verification",
+            "members": [
+              "ea:session/2026-07-27_opencoreimage-embedded/topic/T003",
+              "ea:session/2026-07-27_opencoreimage-embedded/evidence/E003",
+              "ea:session/2026-07-27_opencoreimage-embedded/insight/I001"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/topic/T001",
+      "@type": "Topic",
+      "title": "Swift 6.4 target baseline",
+      "content": "Native compatibility, browser WASM, and Embedded WASM must use the fixed 2026-07-17 Swift 6.4 development snapshot and matching SDKs.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "decompositionStrategy": "target comparison"
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/question/Q001",
+      "@type": "Question",
+      "title": "First Embedded build failure",
+      "content": "Which OpenCoreImage or dependency declaration first prevents Embedded WASM compile or link?",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "questionStatus": "Resolved",
+      "asksAbout": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T002"
+      ],
+      "resolvedBy": [
+        "ea:session/2026-07-27_opencoreimage-embedded/evidence/E001"
+      ]
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/topic/T002",
+      "@type": "Topic",
+      "title": "Renderer capability selection",
+      "content": "CIContext must select a renderer by actual target capability while preserving one ownership and typed-failure contract across targets.",
+      "epistemicStatus": "Hypothesized",
+      "confidence": 0.6,
+      "decompositionStrategy": "causal and structural",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/evidence/E001",
+      "@type": "Evidence",
+      "title": "Embedded build first fails in SwiftWebGPU promise access",
+      "content": "The fixed Swift 6.4 Embedded WASM build compiled OpenCoreGraphics and JavaScriptKit, then failed in SwiftWebGPU/GPUErrors.swift because JSPromise.result is declared by JavaScriptEventLoop but that source imported only JavaScriptKit.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local fixed-toolchain build log",
+      "sourceUrl": "local://OpenCoreImage/swift-6.4-embedded-build",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T002"
+      ]
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/evidence/E002",
+      "@type": "Evidence",
+      "title": "Embedded build next fails on OpenCoreGraphics Foundation import",
+      "content": "After correcting JavaScriptEventLoop ownership imports, the fixed Embedded build advanced to OpenCoreGraphics and failed at CGAffineTransform.swift because Foundation is unavailable in Embedded mode. A separate compiler probe also rejected FoundationEssentials and rejected Foundation even with the normal WASI static module path injected.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local fixed-toolchain build and compiler probes",
+      "sourceUrl": "local://OpenCoreImage/swift-6.4-embedded-foundation-probes",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T004"
+      ]
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/evidence/E003",
+      "@type": "Evidence",
+      "title": "Normal Swift 6.4 WASM target remains buildable",
+      "content": "OpenCoreImage target build completed successfully with the fixed 2026-07-17 normal WASM SDK after explicit JavaScriptEventLoop imports.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local fixed-toolchain build log",
+      "sourceUrl": "local://OpenCoreImage/swift-6.4-wasm-build",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T003"
+      ]
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/topic/T004",
+      "@type": "Topic",
+      "title": "Foundation-free graphics base is required for Embedded",
+      "content": "OpenCoreImage cannot compile in Embedded mode until OpenCoreGraphics owns portable geometry and byte-storage contracts instead of relying on Foundation-provided CGFloat, CGPoint, CGRect, Data, and related APIs.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "decompositionStrategy": "transitive dependency and capability analysis",
+      "derivedFrom": [
+        "ea:session/2026-07-27_opencoreimage-embedded/evidence/E002"
+      ]
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/topic/T003",
+      "@type": "Topic",
+      "title": "Verified cross-target OpenCoreImage build",
+      "content": "OpenCoreImage compiles and links on Native, WASM, and Embedded WASM, with behavior tests covering supported and unsupported renderer paths.",
+      "epistemicStatus": "Hypothesized",
+      "confidence": 0.3,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "comparison",
+        "requiredChartType": "target verification matrix"
+      }
+    },
+    {
+      "@id": "ea:session/2026-07-27_opencoreimage-embedded/insight/I001",
+      "@type": "Insight",
+      "title": "Capability-based renderer selection enables the target matrix",
+      "content": "A common CIContext ownership contract combined with capability-specific renderers is expected to allow all targets to compile while keeping unavailable rendering explicit.",
+      "epistemicStatus": "Hypothesized",
+      "confidence": 0.45,
+      "derivedFrom": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T001",
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T002"
+      ],
+      "rationale": "Architecture alone does not distinguish browser WASM from Embedded WASM; renderer capability must be selected at the construction boundary.",
+      "supportsClaim": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T003"
+      ],
+      "primaryEvidence": [],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T001",
+        "ea:session/2026-07-27_opencoreimage-embedded/topic/T002"
+      ],
+      "synthesis": {
+        "claimRole": "intermediate-claim",
+        "reasoningPattern": "causal target-capability decomposition",
+        "synthesisStrength": 0.45,
+        "limitations": "Pending direct build evidence from the fixed SDKs."
+      }
+    }
+  ]
+}

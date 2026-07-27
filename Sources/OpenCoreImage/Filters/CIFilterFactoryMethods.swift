@@ -29,6 +29,9 @@
 
 // MARK: - Blur Filter Factory Methods
 
+// FIXME(INCOMPLETE_IMPLEMENTATION): Most typed factory methods below still lack their per-filter CIFilter protocol conformance.
+// Public typed factory calls reach these failable casts in production and return nil when the corresponding conformance is absent; Embedded Swift also diagnoses those unsupported protocol casts.
+// Remove this marker only after every factory has a semantic property implementation plus success and failure behavior tests on Native, WASM, and Embedded.
 extension CIFilter {
 
     // MARK: - Blur Filters

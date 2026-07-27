@@ -57,7 +57,7 @@ internal final class CIDefaultDetectorEngine: CIDetectorEngine {
                 options: options,
                 minFeatureSize: minFeatureSize,
                 maxFeatureCount: maxFeatureCount
-            )
+            ).map { $0 as CIFeature }
 
         case CIDetectorTypeRectangle:
             return RectangleDetectionAlgorithm.detect(
@@ -66,7 +66,7 @@ internal final class CIDefaultDetectorEngine: CIDetectorEngine {
                 options: options,
                 minFeatureSize: minFeatureSize,
                 maxFeatureCount: maxFeatureCount
-            )
+            ).map { $0 as CIFeature }
 
         case CIDetectorTypeQRCode:
             return QRCodeDetectionAlgorithm.detect(
@@ -75,7 +75,7 @@ internal final class CIDefaultDetectorEngine: CIDetectorEngine {
                 options: options,
                 minFeatureSize: minFeatureSize,
                 maxFeatureCount: maxFeatureCount
-            )
+            ).map { $0 as CIFeature }
 
         case CIDetectorTypeText:
             return TextDetectionAlgorithm.detect(
@@ -84,7 +84,7 @@ internal final class CIDefaultDetectorEngine: CIDetectorEngine {
                 options: options,
                 minFeatureSize: minFeatureSize,
                 maxFeatureCount: maxFeatureCount
-            )
+            ).map { $0 as CIFeature }
 
         default:
             return []

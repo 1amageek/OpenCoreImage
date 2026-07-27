@@ -58,6 +58,9 @@ perl -e 'alarm 30; exec @ARGV' -- \
 # Build for WASM
 TOOLCHAINS=org.swift.64202607171a xcrun swift build \
   --swift-sdk swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-07-17-a_wasm
+
+# Build, link, and execute the Embedded WASM CIContext smoke path
+bash Tests/embedded-smoke.sh
 ```
 
 ## WASM-Build Smoke Test
@@ -69,7 +72,7 @@ the browser checks assert filter-specific RGBA pixels read back from WebGPU;
 the remaining checks cover API and graph behavior.
 
 ```bash
-bash tests/wasm-build.sh
+bash Tests/wasm-build.sh
 cd Tests/e2e && npm test
 ```
 

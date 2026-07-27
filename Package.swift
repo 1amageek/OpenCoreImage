@@ -30,6 +30,27 @@ let package = Package(
                 .product(name: "SwiftWebGPU", package: "swift-webgpu", condition: .when(platforms: [.wasi])),
             ]
         ),
+        .executableTarget(
+            name: "OpenCoreImageEmbeddedSmoke",
+            dependencies: ["OpenCoreImage"],
+            linkerSettings: [
+                .unsafeFlags(
+                    [
+                        "-Xclang-linker", "-mexec-model=reactor",
+                        "-Xlinker", "--export=runOpenCoreImageEmbeddedSmoke"
+                    ],
+                    .when(platforms: [.wasi])
+                ),
+                .linkedLibrary(
+                    "swiftUnicodeDataTables",
+                    .when(platforms: [.wasi])
+                ),
+                .linkedLibrary(
+                    "c++abi",
+                    .when(platforms: [.wasi])
+                )
+            ]
+        ),
         .testTarget(
             name: "OpenCoreImageTests",
             dependencies: ["OpenCoreImage"]

@@ -156,9 +156,9 @@ public class CIFilter {
             case .data(let value):
                 return value
             case .array(let values):
-                return values.map(\.value)
+                return values.map({ $0.value })
             case .dictionary(let values):
-                return values.mapValues(\.value)
+                return values.mapValues({ $0.value })
             }
         }
     }
@@ -389,7 +389,11 @@ public class CIFilter {
                 metadata[kCIAttributeDefault] = int
                 metadata[kCIAttributeType] = kCIAttributeTypeInteger
             default:
+                #if hasFeature(Embedded)
+                metadata[kCIAttributeClass] = "Any"
+                #else
                 metadata[kCIAttributeClass] = String(describing: type(of: value))
+                #endif
             }
         } else {
             // Infer from key name when value is nil
@@ -603,8 +607,34 @@ public class CIFilter {
     ///   - name: The unique name to register the filter under.
     ///   - constructor: The constructor that creates filter instances.
     ///   - classAttributes: Attributes describing the filter's categories and capabilities.
+    #if hasFeature(Embedded)
+    public static func registerName<Constructor>(
+        _ name: String,
+        constructor: Constructor,
+        classAttributes: [String: Any]
+    ) where Constructor: CIFilterConstructor & Sendable {
+        register(
+            name: name,
+            constructor: constructor,
+            classAttributes: classAttributes
+        )
+    }
+    #else
     public class func registerName<Constructor>(
         _ name: String,
+        constructor: Constructor,
+        classAttributes: [String: Any]
+    ) where Constructor: CIFilterConstructor & Sendable {
+        register(
+            name: name,
+            constructor: constructor,
+            classAttributes: classAttributes
+        )
+    }
+    #endif
+
+    private static func register<Constructor>(
+        name: String,
         constructor: Constructor,
         classAttributes: [String: Any]
     ) where Constructor: CIFilterConstructor & Sendable {
@@ -790,7 +820,11 @@ extension CIFilter: CustomDebugStringConvertible {
         desc += "  isEnabled: \(isEnabled)\n"
         desc += "  inputKeys: \(inputKeys)\n"
         for (key, value) in _inputValues {
+            #if hasFeature(Embedded)
+            desc += "  \(key): <value>\n"
+            #else
             desc += "  \(key): \(value)\n"
+            #endif
         }
         return desc
     }
@@ -814,8 +848,10 @@ public protocol CIFilterProtocol: AnyObject {
     /// The output image from the filter.
     var outputImage: CIImage? { get }
 
+    #if !hasFeature(Embedded)
     /// Returns custom attributes that describe the filter type.
     static func customAttributes() -> [String: Any]?
+    #endif
 }
 
 public extension CIFilterProtocol {

@@ -58,7 +58,9 @@ public final class CIVector: Sendable {
     ///
     /// The string should be formatted as "[X Y Z W]" where each value is separated by spaces.
     public convenience init(string representation: String) {
-        let trimmed = representation.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        var trimmed = representation[...]
+        if trimmed.first == "[" { trimmed = trimmed.dropFirst() }
+        if trimmed.last == "]" { trimmed = trimmed.dropLast() }
         let components = trimmed.split(separator: " ")
         var values: [CGFloat] = []
         for component in components {

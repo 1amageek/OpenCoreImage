@@ -933,7 +933,7 @@ public class CIRAWFilter: CIFilter {
     /// The full native size of the unscaled image.
     public var nativeSize: CGSize {
         if let info = _parsedRAWInfo {
-            return CGSize(width: info.width, height: info.height)
+            return CGSize(width: CGFloat(info.width), height: CGFloat(info.height))
         }
         return .zero
     }
@@ -1238,7 +1238,7 @@ public class CIRAWFilter: CIFilter {
         var outputImage = CIImage(
             bitmapData: Data(processedData),
             bytesPerRow: rawInfo.width * 4,
-            size: CGSize(width: rawInfo.width, height: rawInfo.height),
+            size: CGSize(width: CGFloat(rawInfo.width), height: CGFloat(rawInfo.height)),
             format: .RGBA8,
             colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
         )

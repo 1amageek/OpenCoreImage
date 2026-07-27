@@ -411,7 +411,10 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
                 // MARK: - 8-bit RGBA variants
                 case .RGBA8:
                     // No conversion needed
-                    memcpy(destBase, srcBase, min(data.count, resultCount))
+                    destBase.copyMemory(
+                        from: srcBase,
+                        byteCount: min(data.count, resultCount)
+                    )
 
                 case .BGRA8:
                     // BGRA -> RGBA: swap B and R
@@ -821,10 +824,9 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
                     guard srcOffset + copyBytesPerRow <= dataCount,
                           destOffset + copyBytesPerRow <= resultCount else { continue }
 
-                    memcpy(
-                        destBase.advanced(by: destOffset),
-                        srcBase.advanced(by: srcOffset),
-                        copyBytesPerRow
+                    destBase.advanced(by: destOffset).copyMemory(
+                        from: srcBase.advanced(by: srcOffset),
+                        byteCount: copyBytesPerRow
                     )
                 }
             }
@@ -950,7 +952,10 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
             ) else { return }
 
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(
+                cgImage,
+                in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+            )
         }
 
         return pixelData

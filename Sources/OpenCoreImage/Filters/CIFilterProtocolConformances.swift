@@ -17,8 +17,6 @@
 //  coverage is tracked at the top of `CIFilterFactoryMethods.swift`.
 //
 
-import Foundation
-
 // Callers commonly assign CGFloat/Double literals to input properties
 // (e.g. `setValue(10.0, forKey:)`), so typed getters must accept any
 // numeric form, not just Float, to avoid silently returning the default.
@@ -28,7 +26,9 @@ private func floatValue(_ value: Any?, default fallback: Float) -> Float {
     if let d = value as? Double { return Float(d) }
     if let c = value as? CGFloat { return Float(c) }
     if let i = value as? Int { return Float(i) }
+    #if !hasFeature(Embedded)
     if let n = value as? NSNumber { return n.floatValue }
+    #endif
     return fallback
 }
 

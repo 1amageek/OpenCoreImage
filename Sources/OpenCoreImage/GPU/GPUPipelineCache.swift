@@ -81,7 +81,7 @@ internal actor GPUPipelineCache {
                 )
             } catch {
                 throw GPUError.pipelineCreationFailed(
-                    "Failed to create pipeline for \(filterName): \(error)"
+                    "Failed to create pipeline for \(filterName)"
                 )
             }
 

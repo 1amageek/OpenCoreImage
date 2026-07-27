@@ -7,6 +7,7 @@
 
 #if arch(wasm32)
 import JavaScriptKit
+import JavaScriptEventLoop
 
 /// Supported image output formats.
 internal enum ImageFormat {

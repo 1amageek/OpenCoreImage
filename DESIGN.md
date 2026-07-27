@@ -47,7 +47,7 @@ Requested CIFormat
 |---|---|---|---|
 | Native compatibility tests | `CIStubContextRenderer` | Owned `CIRenderResult` | `CIContext` after `await` |
 | WASM production | `CIWebGPUContextRenderer` | Owned GPU-readback `Data` | `CIContext` after `await` |
-| Embedded | Not advertised | Not compiled | Not available |
+| Embedded WASM | `CIWebGPUContextRenderer` | Owned GPU-readback `Data` | `CIContext` after `await` |
 
 ## Executor and Shared-State Contracts
 
@@ -67,16 +67,31 @@ caller executor
                     -> caller executor materialization
 ```
 
-| Logical state | Native storage/isolation | WASM storage/isolation | Read/mutation entry point | Release |
-|---|---|---|---|---|
-| Filter registration table | `Mutex<[String: FilterRegistration]>` | Same | `registration(named:)` / `registerName` | Process lifetime |
-| `CIColor` components | `Mutex<UnsafeMutablePointer<CGFloat>>` | Same | `component(at:)` / initialization only | Exactly once in `deinit` |
-| GPU texture pool | Not compiled | `actor GPUTexturePool` | `acquire` / `release` / `clear` | `destroy()` on eviction or clear |
-| Filter graph compiler | Immutable `Sendable` object | Same | Caller-executor `nonsending` methods | ARC |
+| Logical state | Native | WASM | Embedded WASM | Read/mutation entry point | Release |
+|---|---|---|---|---|---|
+| Filter registration table | `Mutex<[String: FilterRegistration]>` | Same | Same | `registration(named:)` / `registerName` | Process lifetime |
+| `CIColor` components | `Mutex<UnsafeMutablePointer<CGFloat>>` | Same | Same | `component(at:)` / initialization only | Exactly once in `deinit` |
+| GPU context | Not compiled | `actor GPUContextManager` | Same | `getDevice()` / actor initialization | Process lifetime |
+| GPU texture pool | Not compiled | `actor GPUTexturePool` | Same | `acquire` / `release` / `clear` | `destroy()` on eviction or clear |
+| GPU pipeline cache | Not compiled | `actor GPUPipelineCache` | Same | `pipeline` / `clear` | Process lifetime or clear |
+| Filter graph compiler | Immutable `Sendable` object | Same | Same | Caller-executor `nonsending` methods | ARC |
 
-OpenCoreImage is not advertised for Embedded Swift, so no Embedded storage
-branch exists. A future Embedded target must use the same synchronization and
-ownership contracts rather than raw mutable target-specific state.
+Embedded WASM compiles the same WebGPU renderer and uses the same actor and
+`Mutex` boundaries as ordinary WASM. The runtime smoke instantiates
+`CIContext`, checks portable geometry and filter configuration, and verifies
+successful and failing file-I/O behavior. It does not prove WebGPU execution in
+Node; GPU semantic verification remains the Chromium browser readback suite.
+
+`GPUError` retains `LocalizedError` conformance on Native and ordinary WASM.
+Embedded Swift does not provide that Foundation protocol, so the same enum
+provides `Error`, `CustomStringConvertible`, and the same `errorDescription`
+property there.
+
+Typed factory methods whose per-filter protocol conformance is not implemented
+remain failable and return `nil`. Embedded Swift emits a diagnostic warning for
+those protocol casts even though the package builds and links. This is an
+explicitly marked incomplete API area and is separate from the verified
+string-based filter graph and `CIContext` rendering path.
 
 ## Filter Registration
 

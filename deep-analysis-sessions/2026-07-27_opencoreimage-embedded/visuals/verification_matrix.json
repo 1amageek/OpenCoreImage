@@ -1,0 +1,8 @@
+{
+  "columns": ["Target", "Compile", "Link", "Runtime behavior"],
+  "rows": [
+    ["Native", "pass", "pass", "58 OpenCoreGraphics + 18 CIContext tests"],
+    ["Ordinary WASM", "pass", "release executable pass", "14 Chromium WebGPU checks passed"],
+    ["Embedded WASM", "pass", "pass with libc++abi", "CIContext init + Data I/O pass"]
+  ]
+}

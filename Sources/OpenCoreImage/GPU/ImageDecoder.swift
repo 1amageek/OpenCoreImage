@@ -7,6 +7,7 @@
 
 #if arch(wasm32)
 import JavaScriptKit
+import JavaScriptEventLoop
 
 /// Result of decoding an image.
 internal struct DecodedImage: Sendable {

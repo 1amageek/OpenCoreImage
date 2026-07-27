@@ -1,0 +1,42 @@
+{
+  "title": "OpenCoreImage Embedded WASM completion audit",
+  "date": "2026-07-27",
+  "scope": [
+    "OpenCoreGraphics portable support boundary",
+    "OpenCoreImage CIContext initialization and rendering contracts",
+    "Swift 6.4 ordinary and Embedded WASM compile/link behavior"
+  ],
+  "root_causes": [
+    {
+      "id": "RC-1",
+      "cause": "OpenCoreGraphics re-exported Foundation-owned geometry, bytes, URL, and math APIs that are absent in Embedded Swift.",
+      "resolution": "Add OpenCoreGraphicsSupport and COpenCoreGraphicsSupport, then route shared sources through one portable import boundary."
+    },
+    {
+      "id": "RC-2",
+      "cause": "JavaScriptKit promise result extensions were used without importing JavaScriptEventLoop.",
+      "resolution": "Import JavaScriptEventLoop at the three promise call sites and SwiftWebGPU error bridge."
+    },
+    {
+      "id": "RC-3",
+      "cause": "Instantiating CIContext pulls the Embedded concurrency runtime, whose C++ virtual dispatch requires libc++abi at executable link time.",
+      "resolution": "Link c++abi explicitly for the Embedded smoke executable."
+    }
+  ],
+  "verification": [
+    { "target": "OpenCoreGraphics Native", "result": "build passed" },
+    { "target": "OpenCoreGraphics ordinary WASM", "result": "build passed" },
+    { "target": "OpenCoreGraphics Embedded WASM", "result": "build passed" },
+    { "target": "OpenCoreGraphics focused behavior tests", "result": "58 passed" },
+    { "target": "OpenCoreImage Native CIContext tests", "result": "18 passed" },
+    { "target": "OpenCoreImage ordinary WASM", "result": "release build and 14 Chromium WebGPU checks passed" },
+    { "target": "OpenCoreImage Embedded WASM", "result": "compile and link passed" },
+    { "target": "Embedded runtime smoke", "result": "CIContext initialization and 5-byte file round trip passed" }
+  ],
+  "limits": [
+    "The Embedded Node smoke does not provide WebGPU; GPU pixel semantics are verified separately in Chromium.",
+    "Typed factory methods without a concrete per-filter conformance still return nil and produce Embedded restriction warnings.",
+    "OpenCoreImage still has explicitly marked incomplete Core Image API areas; this audit does not claim full Apple Core Image semantic parity.",
+    "The Embedded NSAttributedString compatibility type currently carries only its immutable plain string."
+  ]
+}

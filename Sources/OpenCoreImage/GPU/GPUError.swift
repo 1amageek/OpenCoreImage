@@ -7,7 +7,7 @@
 
 
 /// Errors that can occur during GPU operations.
-internal enum GPUError: Error, LocalizedError {
+internal enum GPUError: Error, CustomStringConvertible {
     /// WebGPU is not available in this environment.
     case webGPUNotAvailable
 
@@ -72,4 +72,12 @@ internal enum GPUError: Error, LocalizedError {
             return "Unsupported filter: \(name)"
         }
     }
+
+    public var description: String {
+        errorDescription ?? "Unknown GPU error"
+    }
 }
+
+#if !hasFeature(Embedded)
+extension GPUError: LocalizedError {}
+#endif

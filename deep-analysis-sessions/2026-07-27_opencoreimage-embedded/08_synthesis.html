@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenCoreImage Embedded WASM completion audit</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; background: #0b1020; color: #e8edf8; }
+    main { max-width: 1040px; margin: auto; padding: 48px 28px 72px; }
+    h1 { font-size: clamp(32px, 5vw, 58px); margin: 0 0 12px; }
+    h2 { margin-top: 44px; color: #91d7ff; }
+    .lead { max-width: 760px; color: #b9c6dc; font-size: 18px; line-height: 1.7; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: center; }
+    .node { background: #151d33; border: 1px solid #31405f; border-radius: 14px; padding: 18px; text-align: center; }
+    .arrow { color: #64d2ff; text-align: center; font-size: 24px; }
+    table { width: 100%; border-collapse: collapse; background: #11182a; }
+    th, td { padding: 14px; border: 1px solid #2a3652; text-align: left; vertical-align: top; }
+    th { color: #91d7ff; }
+    .pass { color: #72e6a1; font-weight: 700; }
+    .limit { border-left: 4px solid #ffbd66; padding: 12px 16px; background: #251d15; }
+    code { color: #aee7ff; }
+    @media (max-width: 760px) { .flow { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
+  </style>
+</head>
+<body><main>
+  <h1>OpenCoreImage<br>Embedded WASM監査</h1>
+  <p class="lead">CIContextの問題はOpenCoreImage単独ではなく、OpenCoreGraphicsがFoundationの型・I/O・数学関数を暗黙に所有していた依存境界と、Embedded実行可能物のC++ ABIリンク契約にありました。両境界を明示化し、Swift 6.4固定環境でcompile・link・runtimeを分離検証しました。</p>
+
+  <h2>修正後のデータフロー</h2>
+  <div class="flow">
+    <div class="node">CIContext<br>CIImage / CIFilter</div><div class="arrow">→</div>
+    <div class="node">OpenCoreGraphics<br>portable contracts</div><div class="arrow">→</div>
+    <div class="node">Support layer<br>geometry / Data / math</div><div class="arrow">→</div>
+    <div class="node">WASI + WebGPU<br>target runtime</div>
+  </div>
+
+  <h2>根本原因と解決</h2>
+  <table><thead><tr><th>原因</th><th>解決</th></tr></thead><tbody>
+    <tr><td>EmbeddedにFoundationのgeometry・Data・URL・mathがない</td><td><code>OpenCoreGraphicsSupport</code>とC supportを追加し、共有sourceのimport境界を一本化</td></tr>
+    <tr><td>Promise result extensionのmodule import不足</td><td>JavaScriptEventLoopを実際の呼出し箇所へ追加</td></tr>
+    <tr><td>CIContextが引くConcurrency runtimeのC++ ABI symbol不足</td><td>Embedded smoke productへ<code>libc++abi</code>を明示link</td></tr>
+  </tbody></table>
+
+  <h2>検証</h2>
+  <table><thead><tr><th>Target</th><th>Compile / Link</th><th>Behavior</th></tr></thead><tbody>
+    <tr><td>Native</td><td class="pass">PASS</td><td>OpenCoreGraphics 58件、CIContext 18件</td></tr>
+    <tr><td>通常WASM</td><td class="pass">PASS</td><td>Chromium WebGPU readback 14/14</td></tr>
+    <tr><td>Embedded WASM</td><td class="pass">PASS</td><td>CIContext生成、geometry、filter設定、Data 5-byte往復、missing URL failure</td></tr>
+  </tbody></table>
+
+  <h2>主張しない範囲</h2>
+  <p class="limit">NodeのEmbedded smokeにはWebGPU deviceがないため、Embedded上のGPU画素意味論は未検証です。また、source中で明示されたCore Imageの未完成APIまでApple実装と同等になったという主張はしません。</p>
+</main></body></html>

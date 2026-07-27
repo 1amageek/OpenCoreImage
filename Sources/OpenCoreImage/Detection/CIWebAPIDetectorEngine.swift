@@ -8,6 +8,7 @@
 #if arch(wasm32)
 
 import JavaScriptKit
+import JavaScriptEventLoop
 
 /// WASM-specific detector engine that uses browser APIs when available.
 ///
@@ -107,6 +108,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine {
 
             // Convert results to CIFaceFeature
             return convertFaceDetectorResults(results, imageHeight: imageData.height)
+                .map { $0 as CIFeature }
         } catch {
             return nil
         }
@@ -221,6 +223,7 @@ internal final class CIWebAPIDetectorEngine: CIDetectorEngine {
 
             // Convert results to CIQRCodeFeature
             return convertBarcodeDetectorResults(results, imageHeight: imageData.height)
+                .map { $0 as CIFeature }
         } catch {
             return nil
         }

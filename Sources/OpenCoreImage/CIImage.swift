@@ -113,7 +113,7 @@ public final class CIImage {
         } catch {
             // Match Apple's behavior of returning nil for unreadable URLs, but
             // surface the failure to stderr so silent regressions are visible.
-            print("CIImage(contentsOf:): failed to read \(url) - \(error)")
+            print("CIImage(contentsOf:): failed to read \(url)")
             return nil
         }
 
@@ -1065,9 +1065,15 @@ public final class CIImage {
     public func settingProperties(_ properties: [AnyHashable: Any]) -> CIImage {
         var newProperties = _properties
         for (key, value) in properties {
+            #if hasFeature(Embedded)
+            if let stringKey = key.stringValue {
+                newProperties[stringKey] = value
+            }
+            #else
             if let stringKey = key as? String {
                 newProperties[stringKey] = value
             }
+            #endif
         }
         return CIImage(
             extent: _extent,

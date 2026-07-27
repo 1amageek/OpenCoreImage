@@ -86,7 +86,7 @@ public final class CIWebGPUTransitionExecution {
             parameters: parameters,
             imageWidth: Int(width),
             imageHeight: Int(height),
-            inputExtent: CGRect(x: 0, y: 0, width: Int(width), height: Int(height))
+            inputExtent: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
         )
         guard uniformData.count <= 256 else {
             throw .uniformDataTooLarge(uniformData.count)
