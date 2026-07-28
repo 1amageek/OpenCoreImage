@@ -2,6 +2,7 @@ import OpenCoreImage
 
 private enum EmbeddedSmokeError: Error {
     case geometryContractViolated
+    case urlContractViolated
     case byteStorageContractViolated
     case vectorContractViolated
     case colorContractViolated
@@ -22,8 +23,22 @@ struct OpenCoreImageEmbeddedSmoke {
         guard rect == CGRect(x: 4, y: 4, width: 4, height: 2),
               CGRect.infinite.isInfinite,
               rect.intersection(CGRect(x: 6, y: 3, width: 4, height: 3))
-                == CGRect(x: 6, y: 4, width: 2, height: 2) else {
+                == CGRect(x: 6, y: 4, width: 2, height: 2),
+              !rect.contains(CGPoint(x: rect.maxX, y: rect.minY)),
+              !rect.intersects(CGRect(x: rect.maxX, y: rect.minY, width: 2, height: 2)),
+              rect.intersection(CGRect(x: rect.maxX, y: rect.minY, width: 2, height: 2))
+                == CGRect(x: rect.maxX, y: rect.minY, width: 0, height: 2) else {
             throw EmbeddedSmokeError.geometryContractViolated
+        }
+
+        guard let webURL = URL(string: "https://example.com/assets/image.png"),
+              !webURL.isFileURL,
+              webURL.absoluteString == "https://example.com/assets/image.png",
+              webURL.path == "/assets/image.png",
+              let authorityOnlyURL = URL(string: "https://example.com?size=large"),
+              authorityOnlyURL.path.isEmpty,
+              URL(string: "1nvalid://example.com") == nil else {
+            throw EmbeddedSmokeError.urlContractViolated
         }
 
         var bytes = Data(capacity: 5)

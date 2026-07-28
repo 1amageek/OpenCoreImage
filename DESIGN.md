@@ -54,15 +54,17 @@ Requested CIFormat
 `CIImage`, `CIFilter`, and the Core Graphics image graph are not `Sendable`.
 The asynchronous rendering API is `nonisolated(nonsending)`, so the graph
 remains on the caller's executor while renderer-owned values cross suspension
-points. The WebGPU renderer does not cache mutable device, queue, task, or
-option state. It acquires the current device and queue from
-`GPUContextManager` for each render.
+points. SwiftWebGPU wrappers retain owner-thread-bound JavaScript objects and
+are intentionally non-`Sendable`. The renderer stores only the raw device
+handle in the current JavaScript global object and reconstructs its Swift
+wrapper on that same owner. It does not send GPU wrappers through an actor,
+task, or `Mutex`.
 
 ```text
 caller executor
     -> non-Sendable CIImage/filter graph
         -> compile and submit
-            -> actor-owned GPU resource pools
+            -> render-owned GPU resources
                 -> Sendable CIRenderResult
                     -> caller executor materialization
 ```
@@ -71,13 +73,14 @@ caller executor
 |---|---|---|---|---|---|
 | Filter registration table | `Mutex<[String: FilterRegistration]>` | Same | Same | `registration(named:)` / `registerName` | Process lifetime |
 | `CIColor` components | `Mutex<UnsafeMutablePointer<CGFloat>>` | Same | Same | `component(at:)` / initialization only | Exactly once in `deinit` |
-| GPU context | Not compiled | `actor GPUContextManager` | Same | `getDevice()` / actor initialization | Process lifetime |
-| GPU texture pool | Not compiled | `actor GPUTexturePool` | Same | `acquire` / `release` / `clear` | `destroy()` on eviction or clear |
-| GPU pipeline cache | Not compiled | `actor GPUPipelineCache` | Same | `pipeline` / `clear` | Process lifetime or clear |
-| Filter graph compiler | Immutable `Sendable` object | Same | Same | Caller-executor `nonsending` methods | ARC |
+| GPU device handle | Not compiled | Current JS owner global | Same | `createDevice()` on caller executor | `clearCaches()` drops the owner-local handle |
+| Render textures | Not compiled | Render-owned array | Same | Graph compilation only | `destroy()` on compile failure or render completion |
+| Uniform buffers | Not compiled | Render-owned array | Same | Graph compilation only | `destroy()` on compile failure or render completion |
+| Pipelines | Not compiled | Render-local | Same | Caller-executor `createPipeline` | JavaScript GC after render |
+| Filter graph compiler | Immutable non-`Sendable` object | Same | Same | Caller-executor `nonsending` methods | ARC |
 
-Embedded WASM compiles the same WebGPU renderer and uses the same actor and
-`Mutex` boundaries as ordinary WASM. The runtime smoke instantiates
+Embedded WASM compiles the same WebGPU renderer and uses the same owner-local
+resource contract as ordinary WASM. The runtime smoke instantiates
 `CIContext`, checks portable geometry and filter configuration, and verifies
 successful and failing file-I/O behavior. It does not prove WebGPU execution in
 Node; GPU semantic verification remains the Chromium browser readback suite.
@@ -116,18 +119,14 @@ internal pointer read uses the same `Mutex` on Native and WASM. The public
 `CIColor` owner is retained; callers must not mutate or retain the pointer past
 the owner's lifetime.
 
-## WebGPU Texture Pool
+## WebGPU Resource Lifetime
 
-Texture compatibility includes device identity, dimensions, format, and usage
-flags. Releasing a texture with a different device or usage cannot make it
-eligible for an incompatible acquisition. The pool is bounded to four textures
-per compatibility key and twenty textures globally; overflow textures are
-destroyed immediately.
-
-The pool uses bounded array storage. The fixed capacity makes lookup cost
-constant-bounded and avoids the composite-key dictionary release-WASM failure
-observed with the fixed Swift 6.4 baseline. Browser release tests exercise
-allocation, filter execution, readback, release, and subsequent reuse.
+Every compiled graph owns its textures and uniform buffers. Compilation
+failure destroys all resources allocated before the failure. After compilation,
+the renderer uses an isolation-preserving cleanup scope around upload,
+execution, readback, and result construction, so every success or error path
+destroys the graph resources exactly once. No owner-bound GPU wrapper is stored
+in a Swift actor, task, global, or synchronized cross-executor cache.
 
 ## Known Incomplete API Areas
 

@@ -197,8 +197,6 @@ Sources/OpenCoreImage/
 │   └── WebGPU/                        # WebGPU implementation
 │       ├── CIWebGPUContextRenderer.swift
 │       ├── FilterGraphCompiler.swift
-│       ├── GPUTexturePool.swift
-│       ├── GPUPipelineCache.swift
 │       └── WGSLShaderRegistry.swift
 │
 └── Filters/
@@ -412,14 +410,14 @@ swift-webgpu provides:
 │  (CIImage, CIFilter, CIContext, CIKernel - CoreImage API)   │
 ├─────────────────────────────────────────────────────────────┤
 │                  WebGPU Rendering Layer                     │
-│  ┌─────────────────┐  ┌──────────────────┐                 │
-│  │ GPUContextManager│  │ WGSLShaderRegistry│                │
-│  │ (Device init)   │  │ (Filter shaders) │                 │
-│  └─────────────────┘  └──────────────────┘                 │
-│  ┌─────────────────┐  ┌──────────────────┐                 │
-│  │ GPUTexturePool  │  │ GPUPipelineCache │                 │
-│  │ (Memory mgmt)   │  │ (Perf optim)     │                 │
-│  └─────────────────┘  └──────────────────┘                 │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ Owner-local device│  │ WGSLShaderRegistry│               │
+│  │ (JS global handle)│  │ (Filter shaders) │               │
+│  └──────────────────┘  └──────────────────┘                │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ Graph-owned GPU  │  │ Render-local GPU │                │
+│  │ resources        │  │ pipelines        │                │
+│  └──────────────────┘  └──────────────────┘                │
 ├─────────────────────────────────────────────────────────────┤
 │                     swift-webgpu                            │
 │         (SwiftWebGPU - Type-safe WebGPU bindings)           │
@@ -434,26 +432,27 @@ swift-webgpu provides:
 
 ### Core Components
 
-#### 1. GPUContextManager
+#### 1. JavaScript-owner device lifecycle
 
-Manages WebGPU device initialization and lifecycle:
+JavaScriptKit objects are owner-bound and non-Sendable. The current JavaScript
+execution context owns the raw device handle; Swift reconstructs a short-lived
+wrapper only on that same owner:
 
 ```swift
-internal actor GPUContextManager {
-    static let shared = GPUContextManager()
+private let deviceGlobalKey = "__openCoreImageGPUDevice"
 
-    private var device: GPUDevice?
-    private var queue: GPUQueue?
-
-    func getDevice() async throws -> GPUDevice {
-        if let device = device { return device }
-
-        let adapter = try await GPU.requestAdapter()
-        let device = try await adapter.requestDevice()
-        self.device = device
-        self.queue = device.queue
-        return device
+private nonisolated(nonsending) func createDevice() async throws -> GPUDevice {
+    if let object = JSObject.global[deviceGlobalKey].object {
+        return GPUDevice(jsObject: object)
     }
+
+    guard let gpu = GPU.shared,
+          let adapter = try await gpu.requestAdapter() else {
+        throw CIContextError.gpuNotAvailable
+    }
+    let device = try await adapter.requestDevice()
+    JSObject.global[deviceGlobalKey] = device.ownerBoundJSObject.jsValue
+    return device
 }
 ```
 
@@ -462,24 +461,20 @@ internal actor GPUContextManager {
 CIContext uses GPUDevice for rendering:
 
 ```swift
-public class CIContext {
-    private var gpuDevice: GPUDevice?
+public final class CIContext {
+    private let renderer: any CIContextRenderer
 
-    public init(options: [CIContextOption: Any]? = nil) {
-        // Initialize WebGPU device asynchronously
-        Task {
-            self.gpuDevice = try await GPUContextManager.shared.getDevice()
-        }
-    }
-
-    public func createCGImage(_ image: CIImage, from rect: CGRect) -> CGImage? {
-        // Execute filter chain on GPU
-        // Read back pixels to create CGImage
-    }
-
-    public func render(_ image: CIImage, to destination: CIRenderDestination) {
-        // Submit compute passes for filter chain
-        // Output to destination texture
+    public func createCGImageAsync(
+        _ image: CIImage,
+        from rect: CGRect
+    ) async throws -> CGImage {
+        let result = try await renderer.render(
+            image: image,
+            to: rect,
+            format: .RGBA8,
+            colorSpace: nil
+        )
+        return try result.makeCGImage()
     }
 }
 ```
@@ -566,38 +561,11 @@ Implement the most commonly used filters first:
 
 ### GPU Resource Management
 
-#### Texture Pool
-
-```swift
-internal actor GPUTexturePool {
-    private var availableTextures: [TextureKey: [GPUTexture]] = [:]
-
-    func acquire(width: Int, height: Int, format: GPUTextureFormat) -> GPUTexture {
-        // Reuse existing textures when possible
-    }
-
-    func release(_ texture: GPUTexture) {
-        // Return to pool for reuse
-    }
-}
-```
-
-#### Pipeline Cache
-
-```swift
-internal actor GPUPipelineCache {
-    private var pipelines: [String: GPUComputePipeline] = [:]
-
-    func getPipeline(for filterName: String, device: GPUDevice) async -> GPUComputePipeline {
-        if let cached = pipelines[filterName] { return cached }
-
-        let shader = WGSLShaderRegistry.shaders[filterName]!
-        let pipeline = await device.createComputePipeline(/* ... */)
-        pipelines[filterName] = pipeline
-        return pipeline
-    }
-}
-```
+`FilterGraphCompiler` returns an owning compiled graph. Every texture and
+uniform buffer created for that graph is destroyed by the render operation on
+both success and failure. Pipeline wrappers are render-local. Do not place
+JavaScript-backed WebGPU wrappers in an actor, Mutex, static Swift cache, or
+Sendable container; those mechanisms do not transfer JavaScript ownership.
 
 ### Lazy Evaluation Model
 
@@ -626,7 +594,10 @@ public class CIContext {
 
 ### Platform Strategy
 
-OpenCoreImage is **exclusively for WASM/Web environments**. No conditional compilation is needed within this library - WebGPU is the only rendering backend.
+OpenCoreImage exposes its portable API on Native, WASM, and Embedded Swift.
+The production GPU renderer is selected at the renderer composition boundary
+for WASM; Native and Embedded builds use their explicit supported contracts and
+typed unsupported paths.
 
 Users select between CoreImage and OpenCoreImage at the import level:
 
@@ -644,18 +615,23 @@ filter?.setValue(inputImage, forKey: kCIInputImageKey)
 let output = filter?.outputImage
 ```
 
-Within OpenCoreImage itself, WebGPU is always used:
+The public API does not retain or expose WebGPU wrappers:
 
 ```swift
-// Inside OpenCoreImage - no conditionals needed
-import WebGPU
+public final class CIContext {
+    private let renderer: any CIContextRenderer
 
-public class CIContext {
-    private var gpuDevice: GPUDevice?
-
-    public func render(_ image: CIImage, to destination: CIRenderDestination) async throws {
-        let device = try await GPUContextManager.shared.getDevice()
-        // WebGPU rendering - the only path
+    public func createCGImageAsync(
+        _ image: CIImage,
+        from rect: CGRect
+    ) async throws -> CGImage {
+        let result = try await renderer.render(
+            image: image,
+            to: rect,
+            format: .RGBA8,
+            colorSpace: nil
+        )
+        return try result.makeCGImage()
     }
 }
 ```
@@ -665,7 +641,7 @@ public class CIContext {
 1. **Minimize GPU-CPU transfers**: Keep intermediate textures on GPU
 2. **Batch filter operations**: Combine multiple filters into single command buffer
 3. **Use workgroup shared memory**: For convolution and blur operations
-4. **Async pipeline compilation**: Pre-compile commonly used filter pipelines
+4. **Owner-safe pipeline compilation**: Compile on the current JavaScript owner
 5. **Texture format optimization**: Use appropriate formats (RGBA8 vs RGBA16F)
 
 ## Testing

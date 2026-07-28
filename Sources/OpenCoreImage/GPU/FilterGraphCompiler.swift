@@ -56,16 +56,11 @@ internal struct CompiledFilterGraph {
 }
 
 /// Compiles CIImage filter graphs (DAG) into GPU execution plans.
-internal final class FilterGraphCompiler: Sendable {
-
-    // MARK: - Singleton
-
-    /// Shared instance of the filter graph compiler.
-    static let shared = FilterGraphCompiler()
+internal final class FilterGraphCompiler {
 
     // MARK: - Initialization
 
-    private init() {}
+    init() {}
 
     // MARK: - Configuration
 
@@ -174,7 +169,7 @@ internal final class FilterGraphCompiler: Sendable {
 
                 if node.isSource {
                     // Source node - create texture for upload
-                    let texture = await GPUTexturePool.shared.acquire(
+                    let texture = createTexture(
                         device: device,
                         width: width,
                         height: height,
@@ -220,17 +215,11 @@ internal final class FilterGraphCompiler: Sendable {
                 height: height
             )
         } catch {
-            // Release all acquired textures if compilation fails
-            // Copy to local array to avoid capture issues
-            let texturesToRelease = textures
-            for texture in texturesToRelease {
-                await GPUTexturePool.shared.release(
-                    texture,
-                    device: device,
-                    width: width,
-                    height: height,
-                    format: .rgba8unorm
-                )
+            for buffer in uniformBuffers {
+                buffer.destroy()
+            }
+            for texture in textures {
+                texture.destroy()
             }
             throw error
         }
@@ -262,13 +251,13 @@ internal final class FilterGraphCompiler: Sendable {
             }
 
             // Get pipeline
-            let pipeline = try await GPUPipelineCache.shared.getPipeline(
+            let pipeline = try await createPipeline(
                 for: filter.name,
                 device: device
             )
 
             // Create output texture
-            let outputTexture = await GPUTexturePool.shared.acquire(
+            let outputTexture = createTexture(
                 device: device,
                 width: width,
                 height: height,
@@ -362,9 +351,6 @@ internal final class FilterGraphCompiler: Sendable {
         let bindGroupLayout = pipeline.getBindGroupLayout(index: 0)
 
         switch category {
-        case .source:
-            fatalError("Source nodes should not create bind groups")
-
         case .standard, .generator:
             // Standard layout: input(0), output(1), uniform(2)
             let inputIndex = inputTextureIndices[kCIInputImageKey] ?? 0
@@ -600,7 +586,7 @@ internal final class FilterGraphCompiler: Sendable {
         device: GPUDevice,
         sourceNodeId: Int
     ) async throws -> CompiledFilterGraph {
-        let sourceTexture = await GPUTexturePool.shared.acquire(
+        let sourceTexture = createTexture(
             device: device,
             width: width,
             height: height,
@@ -620,6 +606,53 @@ internal final class FilterGraphCompiler: Sendable {
     }
 
     // MARK: - Uniform Buffer
+
+    private func createTexture(
+        device: GPUDevice,
+        width: UInt32,
+        height: UInt32,
+        format: GPUTextureFormat
+    ) -> GPUTexture {
+        device.createTexture(
+            descriptor: GPUTextureDescriptor(
+                size: GPUExtent3D(
+                    width: width,
+                    height: height,
+                    depthOrArrayLayers: 1
+                ),
+                format: format,
+                usage: [.textureBinding, .storageBinding, .copyDst, .copySrc]
+            )
+        )
+    }
+
+    private nonisolated(nonsending) func createPipeline(
+        for filterName: String,
+        device: GPUDevice
+    ) async throws -> GPUComputePipeline {
+        guard let shaderSource = WGSLShaderRegistry.getShader(for: filterName) else {
+            throw GPUError.shaderNotFound(filterName)
+        }
+
+        let shaderModule = device.createShaderModule(
+            descriptor: GPUShaderModuleDescriptor(code: shaderSource)
+        )
+        do {
+            return try await device.createComputePipelineAsync(
+                descriptor: GPUComputePipelineDescriptor(
+                    compute: GPUProgrammableStage(
+                        module: shaderModule,
+                        entryPoint: "main"
+                    ),
+                    layout: .auto
+                )
+            )
+        } catch {
+            throw GPUError.pipelineCreationFailed(
+                "Failed to create pipeline for \(filterName)"
+            )
+        }
+    }
 
     private func createUniformBuffer(device: GPUDevice, data: Data) -> GPUBuffer {
         let buffer = device.createBuffer(

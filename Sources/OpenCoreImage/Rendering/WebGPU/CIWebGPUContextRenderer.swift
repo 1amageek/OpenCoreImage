@@ -7,7 +7,7 @@
 
 #if arch(wasm32)
 import JavaScriptKit
-import SwiftWebGPU
+@_spi(JavaScriptOwner) import SwiftWebGPU
 
 /// WebGPU-based implementation of `CIContextRenderer`.
 ///
@@ -31,6 +31,9 @@ import SwiftWebGPU
 /// ```
 internal final class CIWebGPUContextRenderer: CIContextRenderer {
 
+    private static let deviceGlobalKey = "__openCoreImageGPUDevice"
+    private let graphCompiler: FilterGraphCompiler
+
     // MARK: - Initialization
 
     /// Creates a new WebGPU context renderer.
@@ -38,6 +41,7 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
     /// - Parameter options: Context options.
     init(options: [CIContextOption: Any]?) {
         _ = options
+        self.graphCompiler = FilterGraphCompiler()
     }
 
     // MARK: - CIContextRenderer
@@ -50,8 +54,8 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
     ) async throws -> CIRenderResult {
         try CIRenderResult.validateOutputFormat(format)
 
-        let device = try await GPUContextManager.shared.getDevice()
-        let queue = try await GPUContextManager.shared.getQueue()
+        let device = try await createDevice()
+        let queue = device.queue
 
         let width = Int(rect.width)
         let height = Int(rect.height)
@@ -85,78 +89,87 @@ internal final class CIWebGPUContextRenderer: CIContextRenderer {
         let filterGraph = builder.build(from: image)
 
         // Compile and execute filter graph
-        let compiledGraph = try await FilterGraphCompiler.shared.compile(
+        let compiledGraph = try await graphCompiler.compile(
             image: image,
             outputRect: rect,
             device: device
         )
+        return try await withCIResourceCleanup(
+            cleanup: {
+                releaseResources(for: compiledGraph)
+            },
+            operation: {
+                try await uploadSourceTextures(
+                    filterGraph: filterGraph,
+                    compiledGraph: compiledGraph,
+                    rect: rect,
+                    device: device,
+                    queue: queue
+                )
 
-        // Upload all source textures
-        try await uploadSourceTextures(
-            filterGraph: filterGraph,
-            compiledGraph: compiledGraph,
-            rect: rect,
-            device: device,
-            queue: queue
+                try await executeFilterGraph(
+                    graph: compiledGraph,
+                    device: device,
+                    queue: queue
+                )
+
+                let pixelData = try await readbackTexture(
+                    texture: compiledGraph.textures[compiledGraph.outputTextureIndex],
+                    width: UInt32(width),
+                    height: UInt32(height),
+                    device: device,
+                    queue: queue
+                )
+
+                let resultColorSpace = colorSpace ?? CGColorSpaceCreateDeviceRGB()
+                return try CIRenderResult(
+                    pixelData: pixelData,
+                    width: width,
+                    height: height,
+                    colorSpace: resultColorSpace,
+                    format: format
+                )
+            }
         )
-
-        // Execute filter chain on GPU
-        try await executeFilterGraph(
-            graph: compiledGraph,
-            device: device,
-            queue: queue
-        )
-
-        // Read back result from GPU
-        let pixelData = try await readbackTexture(
-            texture: compiledGraph.textures[compiledGraph.outputTextureIndex],
-            width: UInt32(width),
-            height: UInt32(height),
-            device: device,
-            queue: queue
-        )
-
-        // Release textures back to pool
-        for texture in compiledGraph.textures {
-            await GPUTexturePool.shared.release(
-                texture,
-                device: device,
-                width: compiledGraph.width,
-                height: compiledGraph.height,
-                format: .rgba8unorm
-            )
-        }
-
-        let resultColorSpace: CGColorSpace
-        if let colorSpace {
-            resultColorSpace = colorSpace
-        } else {
-            resultColorSpace = CGColorSpaceCreateDeviceRGB()
-        }
-        let result = try CIRenderResult(
-            pixelData: pixelData,
-            width: width,
-            height: height,
-            colorSpace: resultColorSpace,
-            format: format
-        )
-        return result
     }
 
     func clearCaches() {
-        Task {
-            await GPUTexturePool.shared.clear()
-            await GPUPipelineCache.shared.clear()
-        }
+        JSObject.global[Self.deviceGlobalKey] = .undefined
     }
 
     func reclaimResources() {
-        Task {
-            await GPUTexturePool.shared.clear()
-        }
+        // Render-owned resources are released at the end of every render.
     }
 
     // MARK: - Private Rendering Methods
+
+    private func releaseResources(for graph: CompiledFilterGraph) {
+        for buffer in graph.uniformBuffers {
+            buffer.destroy()
+        }
+        for texture in graph.textures {
+            texture.destroy()
+        }
+    }
+
+    private nonisolated(nonsending) func createDevice() async throws -> GPUDevice {
+        if let jsObject = JSObject.global[Self.deviceGlobalKey].object {
+            return GPUDevice(jsObject: jsObject)
+        }
+        guard let gpu = GPU.shared else {
+            throw GPUError.webGPUNotAvailable
+        }
+        guard let adapter = try await gpu.requestAdapter() else {
+            throw GPUError.adapterNotAvailable
+        }
+        do {
+            let device = try await adapter.requestDevice()
+            JSObject.global[Self.deviceGlobalKey] = device.ownerBoundJSObject.jsValue
+            return device
+        } catch {
+            throw GPUError.deviceNotAvailable
+        }
+    }
 
     private nonisolated(nonsending) func uploadSourceTextures(
         filterGraph: FilterGraph,

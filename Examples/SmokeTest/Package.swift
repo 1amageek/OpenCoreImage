@@ -22,6 +22,7 @@ let package = Package(
     dependencies: [
         .package(path: "../.."),
         .package(path: "../../../OpenCoreGraphics"),
+        .package(path: "../../../swift-webgpu"),
         .package(url: "https://github.com/1amageek/swift-wasm-testing", branch: "main"),
         .package(url: "https://github.com/swiftwasm/JavaScriptKit", exact: "0.56.1"),
     ],
@@ -31,6 +32,8 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenCoreImage", package: "OpenCoreImage"),
                 .product(name: "OpenCoreGraphics", package: "OpenCoreGraphics"),
+                .product(name: "SwiftWebGPU", package: "swift-webgpu"),
+                .product(name: "JavaScriptKit", package: "JavaScriptKit"),
                 .product(name: "WasmTesting", package: "swift-wasm-testing"),
             ],
             linkerSettings: [

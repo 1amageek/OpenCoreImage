@@ -334,9 +334,6 @@ internal struct FilterGraphBuilder {
 
 /// Categories of filters based on their input/output requirements.
 internal enum FilterCategory {
-    /// Source node - has image data, no processing.
-    case source
-
     /// Standard filter - 1 input, 1 output.
     case standard
 

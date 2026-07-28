@@ -14,6 +14,8 @@ import Foundation
 import Synchronization
 import Testing
 import WasmTesting
+import JavaScriptKit
+import SwiftWebGPU
 import OpenCoreImage
 import OpenCoreGraphics
 
@@ -330,5 +332,18 @@ struct OCISmokeTests {
     @Test func missingSourcePixelsAreRejected() throws {
         let error = try #require(currentSmokeState().missingSourceError)
         #expect(error.contains("sourcePixelDataUnavailable"))
+    }
+
+    @Test @MainActor func rejectedJavaScriptPromiseThrowsTypedError() async {
+        let promise = JSPromise.reject(
+            JSObject.global.Error.function!.new("expected rejection")
+        )
+
+        do {
+            _ = try await awaitPromise(promise)
+            Issue.record("A rejected JavaScript promise was returned as a fulfilled value")
+        } catch {
+            #expect(error.message == "expected rejection")
+        }
     }
 }

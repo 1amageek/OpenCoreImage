@@ -62,15 +62,13 @@ internal protocol CIContextRenderer: AnyObject {
 
     // MARK: - Resource Management
 
-    /// Clears all cached resources.
+    /// Clears renderer-owned reusable state.
     ///
-    /// This includes cached textures, pipelines, and any other GPU resources.
+    /// Render-owned textures, buffers, and pipelines are released by each
+    /// render operation and are never retained here.
     func clearCaches()
 
-    /// Reclaims unused resources.
-    ///
-    /// Releases resources that are no longer in active use but may have been
-    /// retained for potential reuse.
+    /// Reclaims unused renderer-owned resources when the backend retains any.
     func reclaimResources()
 
     // MARK: - Capabilities
@@ -95,4 +93,16 @@ extension CIContextRenderer {
     var maximumOutputSize: CGSize {
         CGSize(width: 16384, height: 16384)
     }
+}
+
+/// Executes an asynchronous operation and releases its owned resource exactly
+/// once on success or failure without crossing the caller's isolation domain.
+internal nonisolated(nonsending) func withCIResourceCleanup<Output>(
+    cleanup: () -> Void,
+    operation: () async throws -> Output
+) async rethrows -> Output {
+    defer {
+        cleanup()
+    }
+    return try await operation()
 }
